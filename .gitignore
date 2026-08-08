@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node (frontend lands later)
+node_modules/
+.next/
+
+# Local env & data
+.env
+*.db
+logs/
+

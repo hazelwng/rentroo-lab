@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# roo — dev commands for rentroo-lab
+set -euo pipefail
+cd "$(dirname "$0")"
+
+if [[ -d backend/.venv ]]; then
+    export PATH="$PWD/backend/.venv/bin:$PATH"
+fi
+
+usage() {
+    cat <<'EOF'
+usage: ./roo <command>
+
+  test      run backend tests
+  lint      ruff check + format check
+EOF
+}
+
+case "${1:-}" in
+    test) cd backend && python -m pytest "${@:2}" ;;
+    lint) cd backend && ruff check . && ruff format --check . ;;
+    "" | help | -h | --help) usage ;;
+    *)
+        echo "unknown command: $1" >&2
+        usage
+        exit 1
+        ;;
+esac
