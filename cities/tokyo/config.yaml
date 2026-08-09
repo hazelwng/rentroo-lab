@@ -1,0 +1,20 @@
+name: Tokyo
+country: Japan
+state: Tokyo
+center:
+  - 35.681236
+  - 139.767125
+bbox: # south, west, north, east
+  - 35.5287
+  - 139.5629
+  - 35.8178
+  - 139.9199
+timezone: Asia/Tokyo
+commute_provider: csa
+geocoder: gsi_photon
+
+example_addresses:
+  - "2-24-12 Meguro, Meguro City, Tokyo"
+  - "3-7-3 Nakameguro, Meguro City, Tokyo"
+  - "1-10-8 Sangenjaya, Setagaya City, Tokyo"
+  - "5-2-1 Koenji-minami, Suginami City, Tokyo"
