@@ -1,0 +1,10 @@
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
+1,tokyometro,,銀座線,,1,,FF9500,
+2,tokyometro,,丸ノ内線,,1,,F62E36,
+3,tokyometro,,日比谷線,,1,,B5B5AC,
+4,tokyometro,,東西線,,1,,009BBF,
+5,tokyometro,,千代田線,,1,,00BB85,
+6,tokyometro,,有楽町線,,1,,C1A470,
+7,tokyometro,,半蔵門線,,1,,8F76D6,
+8,tokyometro,,南北線,,1,,00AC9B,
+9,tokyometro,,副都心線,,1,,9C5E31,
