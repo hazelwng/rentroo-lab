@@ -40,10 +40,19 @@ class Feed:
     route_colors: dict[str, str] = field(default_factory=dict)  # route_id -> '#FF9500'
     trip_routes: dict[str, str] = field(default_factory=dict)  # trip_id -> route_id
     connections: list[Connection] = field(default_factory=list)  # sorted by dep_time
+    _connections_desc: list[Connection] | None = field(default=None, init=False, repr=False)
 
     def stops_by_name(self, name: str) -> list[Stop]:
         """All platforms whose stop_name matches exactly (e.g. 銀座 has 3)."""
         return [s for s in self.stops.values() if s.name == name]
+
+    def connections_by_arrival(self) -> list[Connection]:
+        """Connections sorted by descending arr_time, cached for reverse scans."""
+        if self._connections_desc is None:
+            self._connections_desc = sorted(
+                self.connections, key=lambda c: c.arr_time, reverse=True
+            )
+        return self._connections_desc
 
 
 def parse_gtfs_time(value: str) -> int:
