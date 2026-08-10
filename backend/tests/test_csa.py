@@ -1,4 +1,10 @@
-from rentroo.transit.csa import MIN_TRANSFER_SEC, reconstruct, scan
+from rentroo.transit.csa import (
+    MIN_TRANSFER_SEC,
+    reconstruct,
+    reconstruct_reverse,
+    scan,
+    scan_reverse,
+)
 from rentroo.transit.gtfs import Connection, Feed, Stop
 from rentroo.transit.transfers import Footpath
 
@@ -101,3 +107,97 @@ def test_scan_with_per_stop_ready_times():
     result = scan(feed, {"A1": 120, "A2": 140}, departure=100)
     assert result.arrival_time("B1") == 260
     assert result["B1"].trip_id == "T2"
+
+
+# --- reverse scan (latest departure, "arrive by") -------------------------
+
+
+def test_reverse_scan_direct_ride():
+    feed = make_feed([conn("A1", "B1", 100, 200)])
+    result = scan_reverse(feed, {"B1"}, arrival=300)
+    assert result.departure_time("A1") == 100
+    assert [type(leg).__name__ for leg in reconstruct_reverse(result, "A1")] == ["Connection"]
+
+
+def test_reverse_scan_misses_train_arriving_after_deadline():
+    feed = make_feed([conn("A1", "B1", 100, 200)])
+    assert "A1" not in scan_reverse(feed, {"B1"}, arrival=199)
+    assert "A1" in scan_reverse(feed, {"B1"}, arrival=200)  # exact deadline is fine
+
+
+def test_reverse_scan_transfer_via_footpath():
+    feed = make_feed(
+        [
+            conn("A1", "B1", 100, 200, trip="T1"),
+            conn("B2", "C1", 400, 500, trip="T2", route="R2"),
+        ]
+    )
+    # keyed by the boarding platform: who can walk TO B2 before its train leaves
+    footpaths = {"B2": [Footpath("B2", "B1", walk_time=100)]}
+    result = scan_reverse(feed, {"C1"}, arrival=500, footpaths=footpaths)
+    assert result.departure_time("A1") == 100
+    legs = reconstruct_reverse(result, "A1")
+    assert [type(leg).__name__ for leg in legs] == ["Connection", "Footpath", "Connection"]
+    walk = legs[1]
+    assert (walk.from_stop, walk.to_stop) == ("B1", "B2")  # walk runs toward the boarding side
+
+
+def test_reverse_scan_enforces_min_transfer_time_between_trips():
+    # The onward train leaves B1 at 260. A feeder arriving at 200 can make it
+    # (260 - MIN_TRANSFER_SEC); one arriving at 201 cannot.
+    feed = make_feed(
+        [
+            conn("A1", "B1", 100, 260 - MIN_TRANSFER_SEC, trip="OK"),
+            conn("A2", "B1", 100, 260 - MIN_TRANSFER_SEC + 1, trip="TOO_LATE", route="R2"),
+            conn("B1", "C1", 260, 350, trip="ONWARD", route="R3"),
+        ]
+    )
+    result = scan_reverse(feed, {"C1"}, arrival=400)
+    assert result.departure_time("A1") == 100
+    assert "A2" not in result
+
+
+def test_reverse_scan_prefers_later_departure():
+    feed = make_feed(
+        [
+            conn("A1", "B1", 100, 300, trip="EARLY"),
+            conn("A1", "B1", 120, 250, trip="LATE", route="R2"),
+        ]
+    )
+    result = scan_reverse(feed, {"B1"}, arrival=300)
+    assert result.departure_time("A1") == 120
+    assert result["A1"].trip_id == "LATE"
+
+
+def test_reverse_transfer_penalty_discourages_changing_trains():
+    # From A1, the direct trip leaves at 50; the transfer chain via B1 leaves
+    # at 100 but needs a 65s alighting margin at B1. A penalty larger than
+    # that margin suppresses the transfer, falling back to the direct trip.
+    feed = make_feed(
+        [
+            conn("A1", "C1", 50, 399, trip="DIRECT"),
+            conn("A1", "B1", 100, 235, trip="FEEDER", route="R2"),
+            conn("B1", "C1", 300, 400, trip="ONWARD", route="R3"),
+        ]
+    )
+    no_penalty = scan_reverse(feed, {"C1"}, arrival=400)
+    assert no_penalty.departure_time("A1") == 100
+    assert no_penalty["A1"].trip_id == "FEEDER"
+
+    penalized = scan_reverse(feed, {"C1"}, arrival=400, transfer_penalty_sec=600)
+    assert penalized.departure_time("A1") == 50
+    assert penalized["A1"].trip_id == "DIRECT"
+
+
+def test_reverse_scan_with_per_stop_deadlines():
+    # Destination platforms with unequal egress walks: B1 must be reached by
+    # 250, B2 by 300. Only the train into B2 makes its own deadline.
+    feed = make_feed(
+        [
+            conn("A1", "B1", 100, 260, trip="T1"),
+            conn("A1", "B2", 150, 290, trip="T2", route="R2"),
+        ]
+    )
+    result = scan_reverse(feed, {"B1": 250, "B2": 300}, arrival=300)
+    assert result.departure_time("A1") == 150
+    assert result["A1"].trip_id == "T2"
