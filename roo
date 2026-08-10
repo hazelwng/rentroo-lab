@@ -13,12 +13,14 @@ usage: ./roo <command>
 
   test      run backend tests
   lint      ruff check + format check
+  serve     run the API with auto-reload (http://localhost:8000)
 EOF
 }
 
 case "${1:-}" in
     test) cd backend && python -m pytest "${@:2}" ;;
     lint) cd backend && ruff check . && ruff format --check . ;;
+    serve) cd backend && uvicorn rentroo.api.app:app --reload "${@:2}" ;;
     "" | help | -h | --help) usage ;;
     *)
         echo "unknown command: $1" >&2

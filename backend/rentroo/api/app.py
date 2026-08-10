@@ -1,0 +1,104 @@
+"""FastAPI application: the HTTP surface over the commute and geocoding services."""
+
+import os
+from contextlib import asynccontextmanager
+from dataclasses import asdict
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+
+from rentroo import logging_config
+from rentroo.api import schemas
+from rentroo.commute.service import calculate_commute_batch
+from rentroo.commute.types import CommuteProviderUnavailable, CommuteResult
+from rentroo.config import get_city_config
+from rentroo.geocoding import resolve_destination, suggest_places
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    logging_config.configure()
+    yield
+
+
+def _commute_out(result: CommuteResult | None) -> schemas.CommuteOut | None:
+    if result is None:
+        return None
+    data = asdict(result)
+    return schemas.CommuteOut(
+        transit_minutes=data["transit_minutes"],
+        distance_km=data["distance_km"],
+        summary=data["transit_route_summary"],
+        itinerary=data["transit_itinerary"],
+        route_options=data["route_options"],
+    )
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="rentroo-lab", version="0.1.0", lifespan=_lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.get("/healthz")
+    async def healthz() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/api/city")
+    async def city() -> schemas.CityOut:
+        config = get_city_config()
+        return schemas.CityOut(
+            name=config.name,
+            country=config.country,
+            center=config.center,
+            bbox=config.bbox,
+            timezone=config.timezone,
+            example_addresses=config.example_addresses,
+        )
+
+    @app.get("/api/places/suggest")
+    async def suggest(
+        q: str = Query(min_length=1, max_length=200),
+        limit: int = Query(default=6, ge=1, le=10),
+    ) -> list[schemas.SuggestionOut]:
+        return await suggest_places(q, limit=limit)
+
+    @app.post("/api/commute")
+    async def commute(body: schemas.CommuteIn) -> schemas.CommuteMatrixOut:
+        """Commute matrix: every origin (listing) against every anchor.
+
+        Results per origin are aligned with the resolved `destinations` list;
+        an unroutable pair comes back as null rather than failing the batch.
+        """
+        resolved: list[schemas.DestinationOut] = []
+        for dest in body.destinations:
+            hit = await resolve_destination(dest.name, dest.lat, dest.lon)
+            if hit is None:
+                raise HTTPException(422, detail=f"Could not resolve destination: {dest.name!r}")
+            display_name, (lat, lon) = hit
+            resolved.append(schemas.DestinationOut(name=display_name, lat=lat, lon=lon))
+
+        anchor_coords = [(d.lat, d.lon) for d in resolved]
+        origins_out: list[schemas.OriginResultsOut] = []
+        for origin in body.origins:
+            try:
+                results = await calculate_commute_batch(
+                    (origin.lat, origin.lon), anchor_coords, departure=body.departure
+                )
+            except CommuteProviderUnavailable as e:
+                raise HTTPException(503, detail=str(e)) from e
+            origins_out.append(
+                schemas.OriginResultsOut(id=origin.id, results=[_commute_out(r) for r in results])
+            )
+
+        return schemas.CommuteMatrixOut(
+            departure=body.departure, destinations=resolved, origins=origins_out
+        )
+
+    return app
+
+
+app = create_app()
