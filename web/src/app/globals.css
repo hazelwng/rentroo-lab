@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  /* Pixel motif: the radius scale is deleted outright, so no rounded-*
+     utility exists anywhere in the app. */
+  --radius-*: initial;
+
+  /* Shell chrome: desaturated periwinkle. UI backgrounds, borders and
+     selection only — never data. */
+  --color-per-50: #f7f7ff;
+  --color-per-100: #eeeeff;
+  --color-per-200: #dcdcf5;
+  --color-per-300: #c3c3e8;
+  --color-per-500: #5c5ca6;
+  --color-per-700: #33336b;
+
+  /* The one vivid color. Amber means sunlight, nothing else. */
+  --color-sun: #ef9f27;
+  --color-sun-hi: #fac775;
+  --color-sun-lo: #ba7517;
+
+  --color-ink: #1c1b18;
+  --color-paper: #ffffff;
+}
+
+body {
+  background: var(--color-per-50);
+  color: var(--color-ink);
+}
+
+@layer components {
+  /* mono all-caps: the label voice of the whole site (column headers,
+     buttons, tags). Body text stays in the default sans. */
+  .label-mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}
