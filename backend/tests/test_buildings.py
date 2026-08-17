@@ -22,7 +22,7 @@ def test_meguro_loads_with_sane_heights(meguro):
     heights = [b.height for b in meguro.items]
     assert min(heights) > 0  # -9999 sentinels replaced at seed time
     assert 5 < sorted(heights)[len(heights) // 2] < 15  # median: low-rise Tokyo
-    assert max(heights) > 100 
+    assert max(heights) > 100
 
 
 def test_local_projection_roundtrips_metres(meguro):
