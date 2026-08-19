@@ -45,14 +45,7 @@ def winter_sunlight(
     Direct-sun profile for a window on `floor` (1 = ground) facing `facing`
     degrees clockwise from north, on the given day.
     """
-    x, y = buildings.to_local(lat, lon)
-    own = _containing(buildings, x, y)
-    if own is None:
-        raise BuildingNotFoundError(
-            f"no PLATEAU building contains listing coordinate ({lat:.6f}, {lon:.6f})"
-        )
-    x, y = _facade_point(own, x, y, facing)
-    ground = own.ground
+    x, y, ground = locate_window(buildings, lat, lon, facing)
 
     z_centre = ground + (floor - 1) * FLOOR_HEIGHT + WINDOW_SILL
     window = [z_centre - WINDOW_HALF, z_centre, z_centre + WINDOW_HALF]
@@ -79,6 +72,22 @@ def winter_sunlight(
         segments=_segments(samples),
         samples=samples,
     )
+
+
+def locate_window(
+    buildings: Buildings, lat: float, lon: float, facing: float
+) -> tuple[float, float, float]:
+    """
+    Where the window is: local (x, y) and ground level. Geocoders land on the
+    building centroid, so the point is moved to the facade along `facing`.
+    """
+    x, y = buildings.to_local(lat, lon)
+    own = _containing(buildings, x, y)
+    if own is None:
+        raise BuildingNotFoundError(
+            f"no PLATEAU building contains listing coordinate ({lat:.6f}, {lon:.6f})"
+        )
+    return *_facade_point(own, x, y, facing), own.ground
 
 
 def is_blocked(

@@ -1,4 +1,4 @@
-"""FastAPI application: the HTTP surface over the commute and geocoding services."""
+"""FastAPI application: the HTTP surface over the commute, sunlight and geocoding services."""
 
 import os
 from contextlib import asynccontextmanager
@@ -13,6 +13,8 @@ from rentroo.commute.service import calculate_commute_batch
 from rentroo.commute.types import CommuteProviderUnavailable, CommuteResult
 from rentroo.config import get_city_config
 from rentroo.geocoding import resolve_destination, suggest_places
+from rentroo.sunlight.service import sunlight_report
+from rentroo.sunlight.shadow import BuildingNotFoundError
 
 
 @asynccontextmanager
@@ -96,6 +98,27 @@ def create_app() -> FastAPI:
 
         return schemas.CommuteMatrixOut(
             departure=body.departure, destinations=resolved, origins=origins_out
+        )
+
+    @app.post("/api/sunlight")
+    async def sunlight(body: schemas.SunlightIn) -> schemas.SunlightOut:
+        """Winter-solstice direct sun for one window, plus the footprints around it."""
+        try:
+            report = sunlight_report(
+                body.lat, body.lon, body.floor, body.facing, with_neighbours=body.with_neighbours
+            )
+        except BuildingNotFoundError as e:
+            raise HTTPException(404, detail=str(e)) from e
+        return schemas.SunlightOut(
+            hours=report.result.hours,
+            segments=report.result.segments,
+            samples=report.result.samples,
+            ground=report.ground,
+            neighbours=(
+                None
+                if report.neighbours is None
+                else [schemas.NeighbourOut(**asdict(n)) for n in report.neighbours]
+            ),
         )
 
     return app
