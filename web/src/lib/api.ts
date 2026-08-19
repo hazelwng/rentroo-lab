@@ -1,5 +1,4 @@
-/** Client for the rentroo API. Same-origin only: next.config.ts rewrites
- *  /api/* to the backend. Types mirror backend/rentroo/api/schemas.py. */
+/** Typed client for API routes proxied to the backend by Next.js. */
 
 export type Suggestion = {
   display_name: string;
@@ -34,7 +33,7 @@ export type Itinerary = {
 };
 
 export type RouteOption = {
-  tags: string[]; // "fastest" | "fewest_transfers" | "least_walking"
+  tags: string[]; // Ranking criteria assigned by the commute engine.
   best: boolean;
   itinerary: Itinerary;
 };
@@ -65,5 +64,42 @@ export async function fetchCommute(
     body: JSON.stringify({ origins, destinations, departure }),
   });
   if (!res.ok) throw new Error(`commute failed: ${res.status}`);
+  return res.json();
+}
+
+/** Building footprint expressed in metres relative to the requested window. */
+export type Neighbour = {
+  ring: [number, number][];
+  height: number;
+  ground: number;
+};
+
+export type Sunlight = {
+  hours: number;
+  segments: [number, number][]; // Lit intervals as minutes past midnight.
+  samples: number[]; // Lit fraction at 10-minute intervals from 06:00 to 18:00.
+  ground: number;
+  neighbours: Neighbour[] | null;
+};
+
+/** Fetch winter-solstice sunlight, or null when no seeded building contains the point. */
+export async function fetchSunlight(
+  lat: number,
+  lon: number,
+  opts: { floor?: number; facing?: number; withNeighbours?: boolean } = {},
+): Promise<Sunlight | null> {
+  const res = await fetch("/api/sunlight", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lat,
+      lon,
+      floor: opts.floor ?? 2,
+      facing: opts.facing ?? 180,
+      with_neighbours: opts.withNeighbours ?? false,
+    }),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`sunlight failed: ${res.status}`);
   return res.json();
 }
