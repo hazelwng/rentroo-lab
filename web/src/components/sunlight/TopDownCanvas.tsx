@@ -103,7 +103,7 @@ export function TopDownCanvas({
       }
     }
 
-    // Sample behind the facade to find the home footprint.
+    // Sample inside the window wall to find the home footprint.
     const fr = (facing * Math.PI) / 180;
     const ix = -Math.sin(fr) * 1.5;
     const iy = -Math.cos(fr) * 1.5;

@@ -1,15 +1,31 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { SuggestInput } from "@/components/SuggestInput";
 import { SunBlocks } from "@/components/sunlight/SunBlocks";
 import { Timeline } from "@/components/sunlight/Timeline";
+import type { SceneView } from "@/components/sunlight/SunScene";
 import { TopDownCanvas } from "@/components/sunlight/TopDownCanvas";
 import { Sunlight, Suggestion } from "@/lib/api";
 import { Listing } from "@/lib/listings";
 import { useSunlight } from "@/lib/useSunlight";
 
 /** Interactive sunlight preview; controls do not change saved listings. */
+
+const SunScene = dynamic(
+  () => import("@/components/sunlight/SunScene").then((m) => m.SunScene),
+  { ssr: false },
+);
+
+function hasWebGL(): boolean {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
 
 const DIRS: [string, number][] = [
   ["NW", 315],
@@ -87,6 +103,9 @@ export function SunCard({
   const [applied, setApplied] = useState(draft);
   const [timeMin, setTimeMin] = useState(10 * 60);
   const [addValue, setAddValue] = useState("");
+  const [view, setView] = useState<SceneView>("top");
+  const [webgl, setWebgl] = useState<boolean | null>(null);
+  useEffect(() => setWebgl(hasWebGL()), []);
 
   useEffect(() => {
     if (!selected) return;
@@ -108,6 +127,12 @@ export function SunCard({
     selected?.lon,
     applied.floor,
     applied.facing,
+  );
+  const { data: scene } = useSunlight(
+    selected?.lat,
+    selected?.lon,
+    1,
+    applied.facing,
     true,
   );
 
@@ -124,28 +149,53 @@ export function SunCard({
     <div className="grid border-2 border-ink bg-paper lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="relative border-b-2 border-per-200 bg-per-100 lg:border-b-0 lg:border-r-2">
         <div className="absolute left-3 top-3 z-10 flex">
-          <button type="button" className="label-mono border-2 border-ink bg-ink px-3 py-1 text-paper">
-            Top view
-          </button>
-          <button
-            type="button"
-            disabled
-            title="3D room view — coming next"
-            className="label-mono cursor-not-allowed border-2 border-l-0 border-ink bg-paper px-3 py-1 text-per-300"
-          >
-            Room
-          </button>
+          {(["top", "room"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              disabled={v === "room" && webgl === false}
+              title={v === "room" && webgl === false ? "Room view needs WebGL" : undefined}
+              onClick={() => setView(v)}
+              className={`label-mono border-2 border-ink px-3 py-1 ${
+                view === v
+                  ? "bg-ink text-paper"
+                  : "bg-paper text-per-500 hover:text-ink disabled:cursor-not-allowed disabled:text-per-300"
+              } ${v === "room" ? "border-l-0" : ""}`}
+            >
+              {v === "top" ? "Top view" : "Room"}
+            </button>
+          ))}
         </div>
         {selected?.lat != null && selected?.lon != null ? (
-          <div className={stale ? "opacity-60" : ""}>
-            <TopDownCanvas
-              neighbours={shown?.neighbours ?? null}
-              ground={shown?.ground ?? 0}
-              lat={selected.lat}
-              lon={selected.lon}
-              facing={draft.facing}
-              timeMin={timeMin}
-            />
+          <div className={`relative aspect-[9/7] ${stale ? "opacity-60" : ""}`}>
+            {webgl === false ? (
+              <TopDownCanvas
+                neighbours={scene?.neighbours ?? null}
+                ground={scene?.ground ?? 0}
+                lat={selected.lat}
+                lon={selected.lon}
+                facing={applied.facing}
+                timeMin={timeMin}
+              />
+            ) : webgl && scene?.neighbours ? (
+              <SunScene
+                view={view}
+                neighbours={scene.neighbours}
+                ground={scene.ground}
+                lat={selected.lat}
+                lon={selected.lon}
+                floor={draft.floor}
+                facing={applied.facing}
+                timeMin={timeMin}
+              />
+            ) : (
+              <div className="label-mono absolute inset-0 flex items-center justify-center text-per-500">
+                loading buildings…
+              </div>
+            )}
+            {view === "top" && (
+              <span className="label-mono absolute right-3 top-3 text-per-700">N ↑</span>
+            )}
           </div>
         ) : (
           <div className="flex h-64 items-center justify-center text-sm text-per-500 lg:h-full">
