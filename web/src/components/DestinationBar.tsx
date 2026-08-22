@@ -4,10 +4,7 @@ import { useState } from "react";
 import { SuggestInput } from "@/components/SuggestInput";
 import { MAX_DESTINATIONS, useDestinations } from "@/lib/destinations";
 
-/**
- * The destination chips in the top bar: global commute destinations shared by
- * every listing. Adding one gives the whole board a new commute column.
- */
+/** Commute destinations shared by every listing. */
 export function DestinationBar() {
   const [destinations, update] = useDestinations();
   const [adding, setAdding] = useState(false);
@@ -35,8 +32,7 @@ export function DestinationBar() {
       ))}
 
       {adding ? (
-        // blur bubbles up from the input; a suggestion pick fires on
-        // mousedown, so it lands before this collapses the field
+        // Suggestion picks run before blur closes the field.
         <div
           className="w-64"
           onBlur={() => {
@@ -56,7 +52,7 @@ export function DestinationBar() {
               setValue("");
               setAdding(false);
             }}
-            placeholder="会社 / ジム / 保育園..."
+            placeholder="Office / Gym / Daycare..."
           />
         </div>
       ) : (
