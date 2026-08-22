@@ -27,7 +27,7 @@ def test_meguro_loads_with_sane_heights(meguro):
 
 def test_local_projection_roundtrips_metres(meguro):
     x, y = meguro.to_local(*NAKAMEGURO)
-    # ~1 km north should be ~1000 m in y, and x untouched
+    # ~1 km north; x unchanged.
     x2, y2 = meguro.to_local(NAKAMEGURO[0] + 0.009, NAKAMEGURO[1])
     assert abs((y2 - y) - 1000) < 5
     assert abs(x2 - x) < 0.01
@@ -46,3 +46,10 @@ def test_loader_rejects_empty_file(tmp_path):
         json.dump([], f)
     with pytest.raises(ValueError):
         load_buildings(empty)
+
+
+def test_to_latlon_inverts_to_local(meguro):
+    x, y = meguro.to_local(*NAKAMEGURO)
+    lat, lon = meguro.to_latlon(x, y)
+    assert lat == pytest.approx(NAKAMEGURO[0], abs=1e-9)
+    assert lon == pytest.approx(NAKAMEGURO[1], abs=1e-9)

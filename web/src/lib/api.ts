@@ -79,6 +79,7 @@ export type Sunlight = {
   segments: [number, number][]; // Lit intervals as minutes past midnight.
   samples: number[]; // Lit fraction at 10-minute intervals from 06:00 to 18:00.
   ground: number;
+  window: { lat: number; lon: number };
   neighbours: Neighbour[] | null;
 };
 

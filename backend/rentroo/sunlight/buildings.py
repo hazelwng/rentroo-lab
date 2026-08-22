@@ -16,7 +16,7 @@ class Building:
     height: float  # metres above ground
     ground: float  # ground elevation, metres
     ring: tuple[tuple[float, float], ...]  # (x, y) local metres, closed
-    # Bounds for cheap culling before exact geometry tests.
+    # Cached bounds for culling.
     min_x: float
     min_y: float
     max_x: float
@@ -37,6 +37,12 @@ class Buildings:
         y = (lat - self.origin_lat) * M_PER_DEG_LAT
         return x, y
 
+    def to_latlon(self, x: float, y: float) -> tuple[float, float]:
+        """Inverse of `to_local`."""
+        lat = self.origin_lat + y / M_PER_DEG_LAT
+        lon = self.origin_lon + x / (M_PER_DEG_LAT * math.cos(math.radians(self.origin_lat)))
+        return lat, lon
+
     def near(self, x: float, y: float, radius: float) -> list[Building]:
         """Buildings whose bounding box comes within `radius` metres of (x, y)."""
         return [
@@ -53,7 +59,7 @@ def load_buildings(path: Path) -> Buildings:
     if not records:
         raise ValueError(f"no buildings in {path}")
 
-    # centroid of first vertices is a good enough projection origin
+        # Approximate projection origin.
     origin_lat = sum(r["p"][0][1] for r in records) / len(records)
     origin_lon = sum(r["p"][0][0] for r in records) / len(records)
     result = Buildings(origin_lat=origin_lat, origin_lon=origin_lon)

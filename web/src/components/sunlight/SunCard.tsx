@@ -9,12 +9,17 @@ import type { SceneView } from "@/components/sunlight/SunScene";
 import { TopDownCanvas } from "@/components/sunlight/TopDownCanvas";
 import { Sunlight, Suggestion } from "@/lib/api";
 import { Listing } from "@/lib/listings";
+import { TOP_HALF_WIDTH } from "@/lib/sceneConfig";
 import { useSunlight } from "@/lib/useSunlight";
 
-/** Interactive sunlight preview; controls do not change saved listings. */
+/** Sunlight preview with unsaved controls. */
 
 const SunScene = dynamic(
   () => import("@/components/sunlight/SunScene").then((m) => m.SunScene),
+  { ssr: false },
+);
+const MapBase = dynamic(
+  () => import("@/components/sunlight/MapBase").then((m) => m.MapBase),
   { ssr: false },
 );
 
@@ -112,11 +117,11 @@ export function SunCard({
     const base = { floor: selected.floor ?? 2, facing: selected.facing ?? 180 };
     setDraft(base);
     setApplied(base);
-    // Reset controls only when the selected listing changes.
+    // Reset when switching listings.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
-  // Debounce sunlight requests while adjusting controls.
+  // Debounce control changes.
   useEffect(() => {
     const t = setTimeout(() => setApplied(draft), 300);
     return () => clearTimeout(t);
@@ -136,7 +141,7 @@ export function SunCard({
     true,
   );
 
-  // Keep each listing's previous result while it recomputes.
+  // Show the listing's last result while refreshing.
   const lastGood = useRef(new Map<string, Sunlight>());
   useEffect(() => {
     if (selected && data) lastGood.current.set(selected.id, data);
@@ -172,22 +177,31 @@ export function SunCard({
               <TopDownCanvas
                 neighbours={scene?.neighbours ?? null}
                 ground={scene?.ground ?? 0}
-                lat={selected.lat}
-                lon={selected.lon}
+                lat={scene?.window.lat ?? selected.lat}
+                lon={scene?.window.lon ?? selected.lon}
                 facing={applied.facing}
                 timeMin={timeMin}
               />
             ) : webgl && scene?.neighbours ? (
-              <SunScene
-                view={view}
-                neighbours={scene.neighbours}
-                ground={scene.ground}
-                lat={selected.lat}
-                lon={selected.lon}
-                floor={draft.floor}
-                facing={applied.facing}
-                timeMin={timeMin}
-              />
+              <>
+                {view === "top" && (
+                  <MapBase
+                    lat={scene.window.lat}
+                    lon={scene.window.lon}
+                    halfWidth={TOP_HALF_WIDTH}
+                  />
+                )}
+                <SunScene
+                  view={view}
+                  neighbours={scene.neighbours}
+                  ground={scene.ground}
+                  lat={scene.window.lat}
+                  lon={scene.window.lon}
+                  floor={draft.floor}
+                  facing={applied.facing}
+                  timeMin={timeMin}
+                />
+              </>
             ) : (
               <div className="label-mono absolute inset-0 flex items-center justify-center text-per-500">
                 loading buildings…

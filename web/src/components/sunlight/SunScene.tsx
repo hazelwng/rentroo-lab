@@ -4,20 +4,21 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Neighbour } from "@/lib/api";
+import { TOP_HALF_WIDTH } from "@/lib/sceneConfig";
 import { sunVector } from "@/lib/sun";
 import { Buildings } from "@/components/sunlight/Buildings";
 import { Room } from "@/components/sunlight/Room";
 
-/** Shadow-mapped scene around the window: orthographic top view or a view from inside the room. */
+/** Sunlight scene in top or room view. */
 
 export type SceneView = "top" | "room";
 
-const FLOOR_HEIGHT = 3.0; // matches the API
-const TOP_HALF_WIDTH = 150; // metres visible either side in top view
+const FLOOR_HEIGHT = 3.0; // API floor height
 const SUN_DISTANCE = 600;
-const COLOR_GROUND = "#e7e8f5";
+const COLOR_GROUND = "#e7e8f5"; // room view; top view uses the basemap
+const COLOR_SHADOW = "#33336b";
 const COLOR_SUN = "#ef9f27";
-const COLOR_SUNLIGHT = "#ffdfae"; // warm so lit surfaces read as sun, not just brighter
+const COLOR_SUNLIGHT = "#ffdfae"; // sunlit surfaces
 
 function CameraRig({ view, facing, floorY }: { view: SceneView; facing: number; floorY: number }) {
   const set = useThree((s) => s.set);
@@ -39,7 +40,7 @@ function CameraRig({ view, facing, floorY }: { view: SceneView; facing: number; 
     const f = (facing * Math.PI) / 180;
     const dx = Math.sin(f);
     const dz = -Math.cos(f);
-    // Stand at the back of the room looking at the window, so the light patch is in view.
+    // View the room from behind.
     persp.aspect = aspect;
     persp.position.set(-dx * 3.6, floorY + 1.5, -dz * 3.6);
     persp.lookAt(0, floorY + 0.9, 0);
@@ -67,7 +68,7 @@ function Sun({
   const light = useRef<THREE.DirectionalLight>(null);
   const [sx, sy, sz] = sunVector(lat, lon, timeMin);
   const up = sy > 0.01;
-  // Top view needs the whole block shadowed; the room only needs crisp shadows nearby.
+  // Wider shadow range in top view.
   const range = view === "top" ? 240 : 24;
 
   useEffect(() => {
@@ -94,7 +95,7 @@ function Sun({
         shadow-mapSize={[2048, 2048]}
         shadow-camera-near={1}
         shadow-camera-far={SUN_DISTANCE * 2}
-        // bias is in normalized depth, so it scales with `far`; keep it tiny and lean on normalBias
+        // Keep tiny; bias scales with `far`.
         shadow-bias={0}
         shadow-normalBias={0.05}
       />
@@ -141,7 +142,11 @@ export function SunScene({
       <Sun lat={lat} lon={lon} timeMin={timeMin} view={view} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[3000, 3000]} />
-        <meshLambertMaterial color={COLOR_GROUND} />
+        {view === "top" ? (
+          <shadowMaterial color={COLOR_SHADOW} opacity={0.28} />
+        ) : (
+          <meshLambertMaterial color={COLOR_GROUND} />
+        )}
       </mesh>
       <Buildings neighbours={neighbours} ground={ground} facing={facing} showHome={view === "top"} />
       {view === "top" && (

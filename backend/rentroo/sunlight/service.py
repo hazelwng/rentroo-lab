@@ -10,16 +10,16 @@ from rentroo.config import get_city_config
 from rentroo.sunlight.buildings import Buildings, load_buildings
 from rentroo.sunlight.shadow import SunlightResult, locate_window, winter_sunlight
 
-NEIGHBOUR_RADIUS = 300.0  # Radius of building geometry included in visualization responses.
+NEIGHBOUR_RADIUS = 300.0  # visualization radius, metres
 
 
 @dataclass(frozen=True)
 class Neighbour:
     """A nearby building positioned relative to the requested window."""
 
-    ring: list[tuple[float, float]]  # Horizontal (east, north) offsets in metres.
-    height: float  # Metres above the building's ground level.
-    ground: float  # Elevation in the same vertical datum as SunlightReport.ground.
+    ring: list[tuple[float, float]]  # (east, north), metres
+    height: float  # above ground, metres
+    ground: float  # shared elevation datum, metres
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,8 @@ class SunlightReport:
     """Sunlight profile with the scene data requested by the caller."""
 
     result: SunlightResult
-    ground: float  # Ground elevation of the building containing the window, in metres.
+    ground: float  # window-building ground, metres
+    window: tuple[float, float]  # facade origin (lat, lon)
     neighbours: list[Neighbour] | None
 
 
@@ -37,7 +38,7 @@ def _load(buildings_dir: Path) -> Buildings:
     files = sorted(buildings_dir.glob("*.json.gz"))
     if not files:
         raise FileNotFoundError(f"no seeded buildings in {buildings_dir}")
-    # Datasets currently cover one ward. Combining wards requires a shared projection origin.
+    # Datasets must share a projection origin.
     return load_buildings(files[0])
 
 
@@ -54,7 +55,9 @@ def sunlight_report(
     x, y, ground = locate_window(buildings, lat, lon, facing)
     result = winter_sunlight(buildings, lat, lon, floor, facing)
     neighbours = _neighbours(buildings, x, y) if with_neighbours else None
-    return SunlightReport(result=result, ground=ground, neighbours=neighbours)
+    return SunlightReport(
+        result=result, ground=ground, window=buildings.to_latlon(x, y), neighbours=neighbours
+    )
 
 
 def _neighbours(buildings: Buildings, x: float, y: float) -> list[Neighbour]:

@@ -102,7 +102,7 @@ class SunlightIn(BaseModel):
     lon: float
     floor: int = Field(default=2, ge=1, le=60)  # 1 = ground floor
     facing: float = Field(default=180, ge=0, lt=360)  # degrees clockwise from north
-    # footprints within 300 m for a 3D view; ~1000 rings, so off for list views
+    # Include nearby footprints for 3D view.
     with_neighbours: bool = False
 
 
@@ -114,9 +114,15 @@ class NeighbourOut(BaseModel):
     ground: float
 
 
+class WindowOut(BaseModel):
+    lat: float
+    lon: float
+
+
 class SunlightOut(BaseModel):
-    hours: float  # direct-sun hours on the winter solstice
-    segments: list[tuple[int, int]]  # lit stretches, minutes past midnight
-    samples: list[float]  # 0..1 per 10 min from 06:00 to 18:00
-    ground: float  # window's ground level, metres; neighbours' ground is in the same datum
-    neighbours: list[NeighbourOut] | None = None  # only when requested
+    hours: float  # winter-solstice direct sun
+    segments: list[tuple[int, int]]  # lit minutes past midnight
+    samples: list[float]  # 10-minute fractions, 06:00–18:00
+    ground: float  # shared elevation datum, metres
+    window: WindowOut  # neighbour origin
+    neighbours: list[NeighbourOut] | None = None  # optional footprints
