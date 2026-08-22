@@ -41,3 +41,11 @@ export function formatTime(minutes: number): string {
   const m = minutes % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
+
+/** Unit vector towards the sun in scene space (x east, y up, z south). */
+export function sunVector(lat: number, lon: number, minutes: number): [number, number, number] {
+  const { altitude, azimuth } = sunPosition(lat, lon, minutes);
+  const alt = rad(altitude);
+  const az = rad(azimuth);
+  return [Math.cos(alt) * Math.sin(az), Math.sin(alt), -Math.cos(alt) * Math.cos(az)];
+}
