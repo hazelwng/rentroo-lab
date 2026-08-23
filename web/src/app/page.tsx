@@ -3,10 +3,11 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AddressField } from "@/components/AddressField";
 import { DestinationBar } from "@/components/DestinationBar";
-import { CommuteRoutes, RouteSort } from "@/components/commute/CommuteRoutes";
+import { CommuteRoutes, RouteSort, sortOptions } from "@/components/commute/CommuteRoutes";
+import { RouteMap } from "@/components/commute/RouteMap";
 import { SunBlocks } from "@/components/sunlight/SunBlocks";
 import { SunCard } from "@/components/sunlight/SunCard";
-import { CommuteCell, fetchCommute, Suggestion } from "@/lib/api";
+import { CommuteCell, fetchCommute, RouteOption, Suggestion } from "@/lib/api";
 import { useDestinations } from "@/lib/destinations";
 import { Listing, loadListings, saveListings } from "@/lib/listings";
 import { useSunlight } from "@/lib/useSunlight";
@@ -67,6 +68,8 @@ export default function Home() {
 
   // listing id -> one cell per destination, in destination order
   const [cells, setCells] = useState<Record<string, CommuteCell[]>>({});
+  // Map route by listing and destination column.
+  const [picked, setPicked] = useState<Record<string, RouteOption>>({});
   const [commuteError, setCommuteError] = useState(false);
   const runRef = useRef(0);
 
@@ -354,11 +357,36 @@ export default function Home() {
                               ) : cell === null ? (
                                 <p className="text-sm text-per-500">No route found.</p>
                               ) : (
-                                <CommuteRoutes
-                                  options={cell.route_options ?? []}
-                                  sort={routeSort}
-                                  maskColor="var(--color-per-50)"
-                                />
+                                (() => {
+                                  const options = cell.route_options ?? [];
+                                  const key = `${listing.id}:${col}`;
+                                  const pick = picked[key];
+                                  const selected = options.includes(pick)
+                                    ? pick
+                                    : (sortOptions(options, routeSort)[0] ?? null);
+                                  return (
+                                    <>
+                                      <RouteMap
+                                        className="mb-3 h-[320px]"
+                                        options={options}
+                                        selected={selected}
+                                        origin={{
+                                          lat: listing.lat!,
+                                          lon: listing.lon!,
+                                          name: listing.label || listing.address,
+                                        }}
+                                        destination={destination}
+                                      />
+                                      <CommuteRoutes
+                                        options={options}
+                                        sort={routeSort}
+                                        maskColor="var(--color-per-50)"
+                                        selected={selected}
+                                        onSelect={(o) => setPicked((p) => ({ ...p, [key]: o }))}
+                                      />
+                                    </>
+                                  );
+                                })()
                               )}
                             </div>
                           );

@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { AttributionControl, GeoJSONSource, Map as MapLibre, setWorkerUrl } from "maplibre-gl";
-import type { Feature, FeatureCollection, Polygon, MultiPolygon } from "geojson";
+import { GeoJSONSource, Map as MapLibre } from "maplibre-gl";
+import type { Feature, Polygon, MultiPolygon } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Neighbour } from "@/lib/api";
 import { findHome } from "@/lib/buildingGeometry";
-import { mapStyle } from "@/lib/mapStyle";
+import { createMap, EMPTY, fc, LABELS_START } from "@/lib/createMap";
 import { shadowPolygons } from "@/lib/shadows";
 import { sunPosition } from "@/lib/sun";
 
@@ -20,11 +20,6 @@ const COLOR_BUILDING = "#c3c3e8";
 const COLOR_HOME = "#5c5ca6";
 const COLOR_SHADOW = "#33336b";
 const COLOR_SUN = "#ef9f27";
-
-const LABELS_START = "road-name"; // insert below labels
-
-// Copied by copy-maplibre-worker.mjs.
-setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 type Ring = [number, number][];
 
@@ -45,10 +40,6 @@ function square(cx: number, cy: number, half: number): Ring {
 
 const closed = (ring: Ring): Ring => (ring.length ? [...ring, ring[0]] : ring);
 
-function fc(features: Feature[]): FeatureCollection {
-  return { type: "FeatureCollection", features };
-}
-
 function frame(map: MapLibre, lat: number, lon: number) {
   const el = map.getContainer();
   if (!el.clientWidth || !el.clientHeight) return;
@@ -63,8 +54,6 @@ function frame(map: MapLibre, lat: number, lon: number) {
     { padding: 0, linear: true, animate: false },
   );
 }
-
-const EMPTY = fc([]);
 
 function addLayers(map: MapLibre) {
   for (const id of ["shadows", "buildings", "home", "markers"]) {
@@ -220,21 +209,7 @@ export function TopMap({
 
   useEffect(() => {
     if (!container.current) return;
-    const map = new MapLibre({
-      container: container.current,
-      style: mapStyle,
-      center: [view.current.lon, view.current.lat],
-      zoom: 16,
-      attributionControl: false,
-      fadeDuration: 0,
-      scrollZoom: false,
-      dragRotate: false,
-      pitchWithRotate: false,
-      keyboard: false,
-    });
-    map.touchZoomRotate.disableRotation();
-    // Keep the sun marker corner clear.
-    map.addControl(new AttributionControl({ compact: true }), "bottom-left");
+    const map = createMap(container.current, [view.current.lon, view.current.lat], 16);
     mapRef.current = map;
     const refit = () => frame(map, view.current.lat, view.current.lon);
     map.on("resize", refit);

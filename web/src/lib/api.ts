@@ -23,6 +23,7 @@ export type Leg = {
   line: string | null;
   line_color: string | null;
   stops: number | null;
+  path: [number, number][] | null; // (lat, lon) in travel order
 };
 
 export type Itinerary = {
