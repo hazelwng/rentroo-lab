@@ -138,15 +138,16 @@ export function SunCard({
     applied.facing,
     true,
   );
-  // Keep the map mounted between listing loads.
+  // Reuse the last scene while loading.
   const lastScene = useRef<Sunlight | null>(null);
   if (sceneData) lastScene.current = sceneData;
   const scene =
     sceneData ?? (sceneStatus === "loading" ? lastScene.current : null);
   const [mapBusy, setMapBusy] = useState(false);
+  const [northDeg, setNorthDeg] = useState(0);
   const loadingMap = view === "top" && (mapBusy || sceneStatus === "loading");
 
-  // Show the listing's last result while refreshing.
+  // Reuse the listing's last result while loading.
   const lastGood = useRef(new Map<string, Sunlight>());
   useEffect(() => {
     if (selected && data) lastGood.current.set(selected.id, data);
@@ -213,6 +214,7 @@ export function SunCard({
                   floor={draft.floor}
                   facing={applied.facing}
                   timeMin={timeMin}
+                  onNorth={setNorthDeg}
                 />
               )
             ) : (
@@ -220,11 +222,15 @@ export function SunCard({
                 loading buildings…
               </div>
             )}
-            {view === "top" && (
-              <span className="label-mono absolute right-3 top-3 text-per-700">
-                N ↑
+            <span className="label-mono absolute right-3 top-3 text-per-700">
+              N{" "}
+              <span
+                className="inline-block"
+                style={{ transform: `rotate(${view === "top" ? 0 : northDeg}deg)` }}
+              >
+                ↑
               </span>
-            )}
+            </span>
             {loadingMap && (
               <span className="label-mono absolute bottom-3 right-3 border border-per-300 bg-paper px-2 py-1 text-per-500">
                 loading map…
@@ -244,7 +250,7 @@ export function SunCard({
       </div>
 
       <div className="flex flex-col gap-5 p-4">
-        {/* Listing | knobs side by side; the 320px side panel at lg stacks them again. */}
+        {/* Side by side until the lg sidebar. */}
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
           <div className="flex min-w-0 flex-col">
             <div className="label-mono mb-2 text-per-500">Listing</div>
