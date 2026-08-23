@@ -17,6 +17,8 @@ const ATTRIBUTION =
 
 export const mapStyle: StyleSpecification = {
   version: 8,
+  // Preserve shadow colour.
+  light: { anchor: "viewport", intensity: 0 },
   glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
   sources: {
     omt: {
