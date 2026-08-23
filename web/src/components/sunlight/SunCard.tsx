@@ -5,18 +5,23 @@ import { useEffect, useRef, useState } from "react";
 import { SuggestInput } from "@/components/SuggestInput";
 import { SunBlocks } from "@/components/sunlight/SunBlocks";
 import { Timeline } from "@/components/sunlight/Timeline";
-import type { SceneView } from "@/components/sunlight/SunScene";
 import { TopDownCanvas } from "@/components/sunlight/TopDownCanvas";
 import { Sunlight, Suggestion } from "@/lib/api";
 import { Listing } from "@/lib/listings";
 import { useSunlight } from "@/lib/useSunlight";
 
-/** Interactive sunlight preview; controls do not change saved listings. */
+/** Sunlight preview with unsaved controls. */
 
 const SunScene = dynamic(
   () => import("@/components/sunlight/SunScene").then((m) => m.SunScene),
   { ssr: false },
 );
+const TopMap = dynamic(
+  () => import("@/components/sunlight/TopMap").then((m) => m.TopMap),
+  { ssr: false },
+);
+
+type View = "top" | "room";
 
 function hasWebGL(): boolean {
   try {
@@ -67,9 +72,7 @@ function ListingChip({
           : "border-2 border-per-200 bg-per-100 hover:border-per-300"
       }`}
     >
-      <span className="truncate">
-        {listing.label || listing.address}
-      </span>
+      <span className="truncate">{listing.label || listing.address}</span>
       <span className="font-mono text-xs whitespace-nowrap">
         {status === "loading" ? (
           <span className="text-per-300">…</span>
@@ -103,7 +106,7 @@ export function SunCard({
   const [applied, setApplied] = useState(draft);
   const [timeMin, setTimeMin] = useState(10 * 60);
   const [addValue, setAddValue] = useState("");
-  const [view, setView] = useState<SceneView>("top");
+  const [view, setView] = useState<View>("top");
   const [webgl, setWebgl] = useState<boolean | null>(null);
   useEffect(() => setWebgl(hasWebGL()), []);
 
@@ -112,11 +115,11 @@ export function SunCard({
     const base = { floor: selected.floor ?? 2, facing: selected.facing ?? 180 };
     setDraft(base);
     setApplied(base);
-    // Reset controls only when the selected listing changes.
+    // Reset when switching listings.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
-  // Debounce sunlight requests while adjusting controls.
+  // Debounce control changes.
   useEffect(() => {
     const t = setTimeout(() => setApplied(draft), 300);
     return () => clearTimeout(t);
@@ -128,20 +131,29 @@ export function SunCard({
     applied.floor,
     applied.facing,
   );
-  const { data: scene } = useSunlight(
+  const { data: sceneData, status: sceneStatus } = useSunlight(
     selected?.lat,
     selected?.lon,
     1,
     applied.facing,
     true,
   );
+  // Keep the map mounted between listing loads.
+  const lastScene = useRef<Sunlight | null>(null);
+  if (sceneData) lastScene.current = sceneData;
+  const scene =
+    sceneData ?? (sceneStatus === "loading" ? lastScene.current : null);
+  const [mapBusy, setMapBusy] = useState(false);
+  const loadingMap = view === "top" && (mapBusy || sceneStatus === "loading");
 
-  // Keep each listing's previous result while it recomputes.
+  // Show the listing's last result while refreshing.
   const lastGood = useRef(new Map<string, Sunlight>());
   useEffect(() => {
     if (selected && data) lastGood.current.set(selected.id, data);
   }, [selected, data]);
-  const previous = selected ? (lastGood.current.get(selected.id) ?? null) : null;
+  const previous = selected
+    ? (lastGood.current.get(selected.id) ?? null)
+    : null;
   const shown = data ?? (status === "loading" ? previous : null);
   const stale = shown !== null && data === null && status === "loading";
 
@@ -154,7 +166,11 @@ export function SunCard({
               key={v}
               type="button"
               disabled={v === "room" && webgl === false}
-              title={v === "room" && webgl === false ? "Room view needs WebGL" : undefined}
+              title={
+                v === "room" && webgl === false
+                  ? "Room view needs WebGL"
+                  : undefined
+              }
               onClick={() => setView(v)}
               className={`label-mono border-2 border-ink px-3 py-1 ${
                 view === v
@@ -172,29 +188,47 @@ export function SunCard({
               <TopDownCanvas
                 neighbours={scene?.neighbours ?? null}
                 ground={scene?.ground ?? 0}
-                lat={selected.lat}
-                lon={selected.lon}
+                lat={scene?.window.lat ?? selected.lat}
+                lon={scene?.window.lon ?? selected.lon}
                 facing={applied.facing}
                 timeMin={timeMin}
               />
             ) : webgl && scene?.neighbours ? (
-              <SunScene
-                view={view}
-                neighbours={scene.neighbours}
-                ground={scene.ground}
-                lat={selected.lat}
-                lon={selected.lon}
-                floor={draft.floor}
-                facing={applied.facing}
-                timeMin={timeMin}
-              />
+              view === "top" ? (
+                <TopMap
+                  neighbours={scene.neighbours}
+                  ground={scene.ground}
+                  lat={scene.window.lat}
+                  lon={scene.window.lon}
+                  facing={applied.facing}
+                  timeMin={timeMin}
+                  onBusy={setMapBusy}
+                />
+              ) : (
+                <SunScene
+                  neighbours={scene.neighbours}
+                  ground={scene.ground}
+                  lat={scene.window.lat}
+                  lon={scene.window.lon}
+                  floor={draft.floor}
+                  facing={applied.facing}
+                  timeMin={timeMin}
+                />
+              )
             ) : (
               <div className="label-mono absolute inset-0 flex items-center justify-center text-per-500">
                 loading buildings…
               </div>
             )}
             {view === "top" && (
-              <span className="label-mono absolute right-3 top-3 text-per-700">N ↑</span>
+              <span className="label-mono absolute right-3 top-3 text-per-700">
+                N ↑
+              </span>
+            )}
+            {loadingMap && (
+              <span className="label-mono absolute bottom-3 right-3 border border-per-300 bg-paper px-2 py-1 text-per-500">
+                loading map…
+              </span>
             )}
           </div>
         ) : (
@@ -210,104 +244,136 @@ export function SunCard({
       </div>
 
       <div className="flex flex-col gap-5 p-4">
-        <div>
-          <div className="label-mono mb-2 text-per-500">Listing</div>
-          <div className="flex flex-col gap-1.5">
-            {placed.map((l) => (
-              <ListingChip
-                key={l.id}
-                listing={l}
-                selected={l.id === selected?.id}
-                onSelect={() => onSelect(l.id)}
+        {/* Listing | knobs side by side; the 320px side panel at lg stacks them again. */}
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
+          <div className="flex min-w-0 flex-col">
+            <div className="label-mono mb-2 text-per-500">Listing</div>
+            <div className="flex max-h-56 flex-col gap-1.5 overflow-y-auto pr-1">
+              {placed.map((l) => (
+                <ListingChip
+                  key={l.id}
+                  listing={l}
+                  selected={l.id === selected?.id}
+                  onSelect={() => onSelect(l.id)}
+                />
+              ))}
+            </div>
+            <div className="mt-1.5">
+              <SuggestInput
+                value={addValue}
+                onValueChange={setAddValue}
+                onPick={(s) => {
+                  setAddValue("");
+                  onAdd(s);
+                }}
+                placeholder="+ Add by address…"
               />
-            ))}
-            <SuggestInput
-              value={addValue}
-              onValueChange={setAddValue}
-              onPick={(s) => {
-                setAddValue("");
-                onAdd(s);
-              }}
-              placeholder="+ Add by address…"
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-6">
-          <div>
-            <div className="label-mono mb-2 text-per-500">Floor</div>
-            <div className="flex items-center border-2 border-per-200">
-              <button
-                type="button"
-                className="px-2.5 py-1.5 hover:bg-per-100"
-                aria-label="Floor down"
-                onClick={() => setDraft((d) => ({ ...d, floor: Math.max(1, d.floor - 1) }))}
-              >
-                ▼
-              </button>
-              <span className="w-11 text-center font-mono text-sm">{draft.floor}F</span>
-              <button
-                type="button"
-                className="px-2.5 py-1.5 hover:bg-per-100"
-                aria-label="Floor up"
-                onClick={() => setDraft((d) => ({ ...d, floor: Math.min(15, d.floor + 1) }))}
-              >
-                ▲
-              </button>
             </div>
           </div>
-          <div>
-            <div className="label-mono mb-2 text-per-500">Facing</div>
-            <div className="grid w-fit grid-cols-3 gap-0.5">
-              {DIRS.map(([label, deg]) =>
-                deg < 0 ? (
-                  <span
-                    key="centre"
-                    className="flex h-7 w-7 items-center justify-center font-mono text-xs font-bold"
-                  >
-                    {dirLabel(draft.facing)}
-                  </span>
-                ) : (
+
+          <div className="flex flex-col gap-5">
+            <div className="flex gap-6">
+              <div>
+                <div className="label-mono mb-2 text-per-500">Floor</div>
+                <div className="flex items-center border-2 border-per-200">
                   <button
-                    key={label}
                     type="button"
-                    className={`label-mono h-7 w-7 ${
-                      draft.facing === deg
-                        ? "border-2 border-ink bg-ink text-paper"
-                        : "border border-per-300 bg-per-100 text-per-500 hover:border-ink hover:text-ink"
-                    }`}
-                    onClick={() => setDraft((d) => ({ ...d, facing: deg }))}
+                    className="px-2.5 py-1.5 hover:bg-per-100"
+                    aria-label="Floor down"
+                    onClick={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        floor: Math.max(1, d.floor - 1),
+                      }))
+                    }
                   >
-                    {label}
+                    ▼
                   </button>
-                ),
-              )}
+                  <span className="w-11 text-center font-mono text-sm">
+                    {draft.floor}F
+                  </span>
+                  <button
+                    type="button"
+                    className="px-2.5 py-1.5 hover:bg-per-100"
+                    aria-label="Floor up"
+                    onClick={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        floor: Math.min(15, d.floor + 1),
+                      }))
+                    }
+                  >
+                    ▲
+                  </button>
+                </div>
+              </div>
+              <div>
+                <div className="label-mono mb-2 text-per-500">Facing</div>
+                <div className="grid w-fit grid-cols-3 gap-0.5">
+                  {DIRS.map(([label, deg]) =>
+                    deg < 0 ? (
+                      <span
+                        key="centre"
+                        className="flex h-7 w-7 items-center justify-center font-mono text-xs font-bold"
+                      >
+                        {dirLabel(draft.facing)}
+                      </span>
+                    ) : (
+                      <button
+                        key={label}
+                        type="button"
+                        className={`label-mono h-7 w-7 ${
+                          draft.facing === deg
+                            ? "border-2 border-ink bg-ink text-paper"
+                            : "border border-per-300 bg-per-100 text-per-500 hover:border-ink hover:text-ink"
+                        }`}
+                        onClick={() => setDraft((d) => ({ ...d, facing: deg }))}
+                      >
+                        {label}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div>
-          <div className="label-mono mb-2 text-per-500">Winter sun — solstice direct light</div>
-          <div className="flex items-baseline gap-3">
-            {shown ? (
-              <>
-                <SunBlocks hours={shown.hours} className="text-xl tracking-widest" />
-                <span className={`font-mono text-2xl font-bold ${stale ? "text-per-300" : ""}`}>
-                  {shown.hours.toFixed(2)}
-                  <span className="text-xs font-normal text-per-500">h</span>
-                </span>
-              </>
-            ) : (
-              <span className="font-mono text-per-300">
-                {status === "loading" ? "…" : "—"}
-              </span>
-            )}
+            <div>
+              <div className="label-mono mb-2 text-per-500">
+                Winter sun — solstice direct light
+              </div>
+              <div className="flex items-baseline gap-3">
+                {shown ? (
+                  <>
+                    <SunBlocks
+                      hours={shown.hours}
+                      className="text-xl tracking-widest"
+                    />
+                    <span
+                      className={`font-mono text-2xl font-bold ${stale ? "text-per-300" : ""}`}
+                    >
+                      {shown.hours.toFixed(2)}
+                      <span className="text-xs font-normal text-per-500">
+                        h
+                      </span>
+                    </span>
+                  </>
+                ) : (
+                  <span className="font-mono text-per-300">
+                    {status === "loading" ? "…" : "—"}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
         <div>
           <div className="label-mono mb-2 text-per-500">Timeline</div>
-          <Timeline segments={shown?.segments ?? null} value={timeMin} onChange={setTimeMin} />
+          <Timeline
+            segments={shown?.segments ?? null}
+            value={timeMin}
+            onChange={setTimeMin}
+          />
         </div>
       </div>
     </div>

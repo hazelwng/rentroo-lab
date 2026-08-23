@@ -114,6 +114,7 @@ def create_app() -> FastAPI:
             segments=report.result.segments,
             samples=report.result.samples,
             ground=report.ground,
+            window=schemas.WindowOut(lat=report.window[0], lon=report.window[1]),
             neighbours=(
                 None
                 if report.neighbours is None

@@ -32,9 +32,10 @@ async def test_sunlight_neighbours_on_request(client):
     resp = await client.post("/api/sunlight", json={**NAKAMEGURO, "with_neighbours": True})
     data = resp.json()
     assert data["neighbours"], "dense station area must have footprints around it"
+    assert data["window"] != NAKAMEGURO
     atlas = max(data["neighbours"], key=lambda n: n["height"])
     assert atlas["height"] > 100  # 中目黒アトラスタワー
-    # rings are relative to the window: something is within 300 m in every direction
+    # Rings are window-relative.
     xs = [x for n in data["neighbours"] for x, _ in n["ring"]]
     assert min(xs) < -100 < 100 < max(xs)
 
