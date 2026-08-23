@@ -289,7 +289,9 @@ def _build_result_for_destination(
         if signature in seen:
             continue
         seen[signature] = len(unique_itineraries)
-        unique_itineraries.append(_build_itinerary(feed, journey, departure))
+        unique_itineraries.append(
+            _build_itinerary(feed, journey, departure, origin_coords, dest_coords)
+        )
 
     # Assign each criterion to the route that actually wins it by measured
     # metric — not by which scan produced it. The nearest-station "least walking"
@@ -437,13 +439,22 @@ def _journey_signature(journey: _Journey) -> tuple:
     return tuple(parts)
 
 
-def _build_itinerary(feed: Feed, journey: _Journey, departure: int) -> TransitItinerary:
+def _build_itinerary(
+    feed: Feed,
+    journey: _Journey,
+    departure: int,
+    origin_coords: tuple[float, float],
+    dest_coords: tuple[float, float],
+) -> TransitItinerary:
     origin_walk_min = _walk_minutes(journey.origin.distance_m)
     destination_walk_min = _walk_minutes(journey.destination.distance_m)
     total_minutes = math.ceil((journey.arrival + destination_walk_min * 60 - departure) / 60)
     trip_ids = _ordered_unique(leg.trip_id for leg in journey.legs if isinstance(leg, Connection))
     transfers = max(0, len(trip_ids) - 1)
 
+    first_leg, last_leg = journey.legs[0], journey.legs[-1]
+    origin_stop = first_leg.dep_stop if isinstance(first_leg, Connection) else first_leg.from_stop
+    dest_stop = last_leg.arr_stop if isinstance(last_leg, Connection) else last_leg.to_stop
     itinerary_legs = [
         ItineraryLeg(
             kind="walk",
@@ -451,6 +462,7 @@ def _build_itinerary(feed: Feed, journey: _Journey, departure: int) -> TransitIt
             to_name=journey.origin.name,
             duration_min=origin_walk_min,
             distance_m=journey.origin.distance_m,
+            path=[origin_coords, _stop_coords(feed, origin_stop)],
         )
     ]
     walk_total_min = origin_walk_min + destination_walk_min
@@ -463,6 +475,7 @@ def _build_itinerary(feed: Feed, journey: _Journey, departure: int) -> TransitIt
                     from_name=feed.stops[group.from_stop].name,
                     to_name=feed.stops[group.to_stop].name,
                     duration_min=transfer_min,
+                    path=[_stop_coords(feed, group.from_stop), _stop_coords(feed, group.to_stop)],
                 )
             )
             walk_total_min += transfer_min
@@ -477,6 +490,8 @@ def _build_itinerary(feed: Feed, journey: _Journey, departure: int) -> TransitIt
                     line=feed.route_names[first.route_id],
                     line_color=feed.route_colors.get(first.route_id),
                     stops=len(group),
+                    path=[_stop_coords(feed, first.dep_stop)]
+                    + [_stop_coords(feed, c.arr_stop) for c in group],
                 )
             )
     itinerary_legs.append(
@@ -486,6 +501,7 @@ def _build_itinerary(feed: Feed, journey: _Journey, departure: int) -> TransitIt
             to_name="destination",
             duration_min=destination_walk_min,
             distance_m=journey.destination.distance_m,
+            path=[_stop_coords(feed, dest_stop), dest_coords],
         )
     )
     return TransitItinerary(
@@ -497,6 +513,11 @@ def _build_itinerary(feed: Feed, journey: _Journey, departure: int) -> TransitIt
 
 
 # ---- shared small helpers ----
+
+
+def _stop_coords(feed: Feed, stop_id: str) -> tuple[float, float]:
+    stop = feed.stops[stop_id]
+    return (stop.lat, stop.lon)
 
 
 def _distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:

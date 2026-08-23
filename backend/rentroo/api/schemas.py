@@ -53,6 +53,7 @@ class LegOut(BaseModel):
     line: str | None = None
     line_color: str | None = None
     stops: int | None = None
+    path: list[tuple[float, float]] | None = None  # (lat, lon) in travel order
 
 
 class ItineraryOut(BaseModel):
