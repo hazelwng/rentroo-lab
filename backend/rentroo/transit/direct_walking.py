@@ -34,6 +34,7 @@ def build_direct_walk_option(
                 to_name="destination",
                 duration_min=duration_min,
                 distance_m=distance_m,
+                path=[origin, destination],
             )
         ],
     )

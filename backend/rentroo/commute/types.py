@@ -17,13 +17,7 @@ class CommuteQuery:
 
 @dataclass
 class ItineraryLeg:
-    """One segment of a transit journey, in travel order.
-
-    kind='walk'     access/egress on foot; distance_m is set.
-    kind='ride'     one vehicle boarding; line/line_color/stops are set.
-    kind='transfer' walking between platforms mid-journey (from_name == to_name
-                    for same-station transfers).
-    """
+    """One journey segment; paths use (lat, lon), with each ride stop included."""
 
     kind: str  # "walk" | "ride" | "transfer"
     from_name: str
@@ -33,6 +27,7 @@ class ItineraryLeg:
     line: str | None = None
     line_color: str | None = None
     stops: int | None = None
+    path: list[tuple[float, float]] | None = None
 
 
 @dataclass

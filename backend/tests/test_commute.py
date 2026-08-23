@@ -36,6 +36,20 @@ async def test_single_commute(real_tokyo):
     assert "ride" in kinds
 
 
+async def test_legs_carry_a_drawable_path(real_tokyo):
+    result = await calculate_commute(NAKAMEGURO, OTEMACHI)
+    best = next(o for o in result.route_options if o.best)
+    legs = best.itinerary.legs
+    assert legs[0].path[0] == NAKAMEGURO and legs[-1].path[-1] == OTEMACHI
+    for leg in legs:
+        assert len(leg.path) >= 2
+        if leg.kind == "ride":
+            assert len(leg.path) == leg.stops + 1
+    # Consecutive legs share endpoints.
+    for prev, nxt in zip(legs, legs[1:], strict=False):
+        assert prev.path[-1] == nxt.path[0]
+
+
 async def test_departure_time_changes_the_plan(real_tokyo):
     morning = await calculate_commute(NAKAMEGURO, OTEMACHI, departure="08:00:00")
     late = await calculate_commute(NAKAMEGURO, OTEMACHI, departure="23:30:00")
