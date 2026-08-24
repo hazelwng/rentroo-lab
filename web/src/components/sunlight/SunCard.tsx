@@ -2,15 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { SuggestInput } from "@/components/SuggestInput";
 import { SunBlocks } from "@/components/sunlight/SunBlocks";
 import { Timeline } from "@/components/sunlight/Timeline";
 import { TopDownCanvas } from "@/components/sunlight/TopDownCanvas";
-import { Sunlight, Suggestion } from "@/lib/api";
+import { Sunlight } from "@/lib/api";
 import { Listing } from "@/lib/listings";
 import { useSunlight } from "@/lib/useSunlight";
 
-/** Sunlight preview with unsaved controls. */
+/** Sunlight for one listing. */
 
 const SunScene = dynamic(
   () => import("@/components/sunlight/SunScene").then((m) => m.SunScene),
@@ -47,65 +46,18 @@ const DIRS: [string, number][] = [
 const dirLabel = (facing: number) =>
   DIRS.find(([, deg]) => deg === facing)?.[0] ?? `${Math.round(facing)}°`;
 
-function ListingChip({
-  listing,
-  selected,
-  onSelect,
-}: {
-  listing: Listing;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const { data, status } = useSunlight(
-    listing.lat,
-    listing.lon,
-    listing.floor ?? 2,
-    listing.facing ?? 180,
-  );
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm ${
-        selected
-          ? "border-2 border-ink bg-paper shadow-[3px_3px_0_var(--color-per-500)]"
-          : "border-2 border-per-200 bg-per-100 hover:border-per-300"
-      }`}
-    >
-      <span className="truncate">{listing.label || listing.address}</span>
-      <span className="font-mono text-xs whitespace-nowrap">
-        {status === "loading" ? (
-          <span className="text-per-300">…</span>
-        ) : data ? (
-          <>
-            <span className="text-sun">■</span> {data.hours.toFixed(1)}h
-          </>
-        ) : (
-          <span className="text-per-300">—</span>
-        )}
-      </span>
-    </button>
-  );
-}
-
 export function SunCard({
-  listings,
-  selectedId,
-  onSelect,
-  onAdd,
+  listing,
+  onChange,
 }: {
-  listings: Listing[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onAdd: (s: Suggestion) => void;
+  listing: Listing | null;
+  onChange?: (id: string, patch: { floor: number; facing: number }) => void;
 }) {
-  const placed = listings.filter((l) => l.lat != null && l.lon != null);
-  const selected = placed.find((l) => l.id === selectedId) ?? placed[0] ?? null;
-
+  const selected =
+    listing && listing.lat != null && listing.lon != null ? listing : null;
   const [draft, setDraft] = useState({ floor: 2, facing: 180 });
   const [applied, setApplied] = useState(draft);
   const [timeMin, setTimeMin] = useState(10 * 60);
-  const [addValue, setAddValue] = useState("");
   const [view, setView] = useState<View>("top");
   const [webgl, setWebgl] = useState<boolean | null>(null);
   useEffect(() => setWebgl(hasWebGL()), []);
@@ -115,15 +67,31 @@ export function SunCard({
     const base = { floor: selected.floor ?? 2, facing: selected.facing ?? 180 };
     setDraft(base);
     setApplied(base);
-    // Reset when switching listings.
+    // Reset on listing change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
-  // Debounce control changes.
+  // Debounce controls.
   useEffect(() => {
     const t = setTimeout(() => setApplied(draft), 300);
     return () => clearTimeout(t);
   }, [draft]);
+
+  // Persist settled controls.
+  const save = useRef(onChange);
+  save.current = onChange;
+  useEffect(() => {
+    if (!selected) return;
+    const current = {
+      floor: selected.floor ?? 2,
+      facing: selected.facing ?? 180,
+    };
+    if (current.floor === applied.floor && current.facing === applied.facing)
+      return;
+    save.current?.(selected.id, applied);
+    // Listing changes reset first.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applied]);
 
   const { data, status } = useSunlight(
     selected?.lat,
@@ -138,7 +106,7 @@ export function SunCard({
     applied.facing,
     true,
   );
-  // Reuse the last scene while loading.
+  // Reuse scene while loading.
   const lastScene = useRef<Sunlight | null>(null);
   if (sceneData) lastScene.current = sceneData;
   const scene =
@@ -147,7 +115,7 @@ export function SunCard({
   const [northDeg, setNorthDeg] = useState(0);
   const loadingMap = view === "top" && (mapBusy || sceneStatus === "loading");
 
-  // Reuse the listing's last result while loading.
+  // Reuse result while loading.
   const lastGood = useRef(new Map<string, Sunlight>());
   useEffect(() => {
     if (selected && data) lastGood.current.set(selected.id, data);
@@ -184,7 +152,7 @@ export function SunCard({
           ))}
         </div>
         {selected?.lat != null && selected?.lon != null ? (
-          <div className={`relative aspect-[9/7] ${stale ? "opacity-60" : ""}`}>
+          <div className={`relative aspect-[9/7] lg:aspect-[16/10] ${stale ? "opacity-60" : ""}`}>
             {webgl === false ? (
               <TopDownCanvas
                 neighbours={scene?.neighbours ?? null}
@@ -226,7 +194,9 @@ export function SunCard({
               N{" "}
               <span
                 className="inline-block"
-                style={{ transform: `rotate(${view === "top" ? 0 : northDeg}deg)` }}
+                style={{
+                  transform: `rotate(${view === "top" ? 0 : northDeg}deg)`,
+                }}
               >
                 ↑
               </span>
@@ -250,125 +220,95 @@ export function SunCard({
       </div>
 
       <div className="flex flex-col gap-5 p-4">
-        {/* Side by side until the lg sidebar. */}
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
-          <div className="flex min-w-0 flex-col">
-            <div className="label-mono mb-2 text-per-500">Listing</div>
-            <div className="flex max-h-56 flex-col gap-1.5 overflow-y-auto pr-1">
-              {placed.map((l) => (
-                <ListingChip
-                  key={l.id}
-                  listing={l}
-                  selected={l.id === selected?.id}
-                  onSelect={() => onSelect(l.id)}
-                />
-              ))}
+        <div className="flex flex-col gap-5">
+          <div className="flex gap-6">
+            <div>
+              <div className="label-mono mb-2 text-per-500">Floor</div>
+              <div className="flex items-center border-2 border-per-200">
+                <button
+                  type="button"
+                  className="px-2.5 py-1.5 hover:bg-per-100"
+                  aria-label="Floor down"
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      floor: Math.max(1, d.floor - 1),
+                    }))
+                  }
+                >
+                  ▼
+                </button>
+                <span className="w-11 text-center font-mono text-sm">
+                  {draft.floor}F
+                </span>
+                <button
+                  type="button"
+                  className="px-2.5 py-1.5 hover:bg-per-100"
+                  aria-label="Floor up"
+                  onClick={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      floor: Math.min(15, d.floor + 1),
+                    }))
+                  }
+                >
+                  ▲
+                </button>
+              </div>
             </div>
-            <div className="mt-1.5">
-              <SuggestInput
-                value={addValue}
-                onValueChange={setAddValue}
-                onPick={(s) => {
-                  setAddValue("");
-                  onAdd(s);
-                }}
-                placeholder="+ Add by address…"
-              />
+            <div>
+              <div className="label-mono mb-2 text-per-500">Facing</div>
+              <div className="grid w-fit grid-cols-3 gap-0.5">
+                {DIRS.map(([label, deg]) =>
+                  deg < 0 ? (
+                    <span
+                      key="centre"
+                      className="flex h-7 w-7 items-center justify-center font-mono text-xs font-bold"
+                    >
+                      {dirLabel(draft.facing)}
+                    </span>
+                  ) : (
+                    <button
+                      key={label}
+                      type="button"
+                      className={`label-mono h-7 w-7 ${
+                        draft.facing === deg
+                          ? "border-2 border-ink bg-ink text-paper"
+                          : "border border-per-300 bg-per-100 text-per-500 hover:border-ink hover:text-ink"
+                      }`}
+                      onClick={() => setDraft((d) => ({ ...d, facing: deg }))}
+                    >
+                      {label}
+                    </button>
+                  ),
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col gap-5">
-            <div className="flex gap-6">
-              <div>
-                <div className="label-mono mb-2 text-per-500">Floor</div>
-                <div className="flex items-center border-2 border-per-200">
-                  <button
-                    type="button"
-                    className="px-2.5 py-1.5 hover:bg-per-100"
-                    aria-label="Floor down"
-                    onClick={() =>
-                      setDraft((d) => ({
-                        ...d,
-                        floor: Math.max(1, d.floor - 1),
-                      }))
-                    }
-                  >
-                    ▼
-                  </button>
-                  <span className="w-11 text-center font-mono text-sm">
-                    {draft.floor}F
-                  </span>
-                  <button
-                    type="button"
-                    className="px-2.5 py-1.5 hover:bg-per-100"
-                    aria-label="Floor up"
-                    onClick={() =>
-                      setDraft((d) => ({
-                        ...d,
-                        floor: Math.min(15, d.floor + 1),
-                      }))
-                    }
-                  >
-                    ▲
-                  </button>
-                </div>
-              </div>
-              <div>
-                <div className="label-mono mb-2 text-per-500">Facing</div>
-                <div className="grid w-fit grid-cols-3 gap-0.5">
-                  {DIRS.map(([label, deg]) =>
-                    deg < 0 ? (
-                      <span
-                        key="centre"
-                        className="flex h-7 w-7 items-center justify-center font-mono text-xs font-bold"
-                      >
-                        {dirLabel(draft.facing)}
-                      </span>
-                    ) : (
-                      <button
-                        key={label}
-                        type="button"
-                        className={`label-mono h-7 w-7 ${
-                          draft.facing === deg
-                            ? "border-2 border-ink bg-ink text-paper"
-                            : "border border-per-300 bg-per-100 text-per-500 hover:border-ink hover:text-ink"
-                        }`}
-                        onClick={() => setDraft((d) => ({ ...d, facing: deg }))}
-                      >
-                        {label}
-                      </button>
-                    ),
-                  )}
-                </div>
-              </div>
+          <div>
+            <div className="label-mono mb-2 text-per-500">
+              Winter sun — solstice direct light
             </div>
-
-            <div>
-              <div className="label-mono mb-2 text-per-500">
-                Winter sun — solstice direct light
-              </div>
-              <div className="flex items-baseline gap-3">
-                {shown ? (
-                  <>
-                    <SunBlocks
-                      hours={shown.hours}
-                      className="text-xl tracking-widest"
-                    />
-                    <span
-                      className={`font-mono text-2xl font-bold ${stale ? "text-per-300" : ""}`}
-                    >
-                      {shown.hours.toFixed(2)}
-                      <span className="text-xs font-normal text-per-500">
-                        h
-                      </span>
-                    </span>
-                  </>
-                ) : (
-                  <span className="font-mono text-per-300">
-                    {status === "loading" ? "…" : "—"}
+            <div className="flex items-baseline gap-3">
+              {shown ? (
+                <>
+                  <SunBlocks
+                    hours={shown.hours}
+                    className="text-xl tracking-widest"
+                  />
+                  <span
+                    className={`font-mono text-2xl font-bold ${stale ? "text-per-300" : ""}`}
+                  >
+                    {shown.hours.toFixed(2)}
+                    <span className="text-xs font-normal text-per-500">h</span>
                   </span>
-                )}
-              </div>
+                </>
+              ) : (
+                <span className="font-mono text-per-300">
+                  {status === "loading" ? "…" : "—"}
+                </span>
+              )}
             </div>
           </div>
         </div>
