@@ -34,8 +34,8 @@ JSON per ward.
   only the LOD0 roof outline and measured height were extracted (see
   `backend/scripts/seed_plateau.py`); everything else was dropped.
   出典：国土交通省 Project PLATEAU（https://www.mlit.go.jp/plateau/）を加工して作成。
-- **Coverage**: `meguro.json.gz` holds every building in 目黒区 plus a
-  ~300 m buffer of neighbouring wards, since shadows cross ward borders.
+- **Coverage**: seed output keeps every building in 目黒区 plus a ~600 m
+  buffer of neighbouring wards, matching the shadow search radius. 
 - **Heights**: ~5% of PLATEAU buildings carry no measured height (`-9999`);
   those fall back to storeys × 3 m, or 6 m when storeys are missing too.
 
