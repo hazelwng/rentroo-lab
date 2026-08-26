@@ -26,9 +26,17 @@
 body {
   background: var(--color-per-50);
   color: var(--color-ink);
+  overflow-x: clip;
 }
 
 @layer components {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
   /* mono all-caps: the label voice of the whole site (column headers,
      buttons, tags). Body text stays in the default sans. */
   .label-mono {

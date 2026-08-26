@@ -14,8 +14,11 @@ import { Listing } from "@/lib/listings";
 
 /** Commutes for one listing. */
 
-const SORTS: RouteSort[] = ["time", "transfers", "walk"];
-
+const SORTS: [RouteSort, string][] = [
+  ["time", "Fastest"],
+  ["transfers", "Fewest transfers"],
+  ["walk", "Least walking"],
+];
 export function CommuteCard({
   listing,
   destinations,
@@ -51,19 +54,21 @@ export function CommuteCard({
 
       <div className="px-4 py-4">
         {!listing || !origin ? (
-          <p className="text-sm text-per-500">
+          <p className="label-mono py-10 text-center text-per-500">
             Add a listing to see its commute.
           </p>
         ) : !destinations?.length ? (
-          <p className="text-sm text-per-500">
-            Add a destination to see routes.
+          <p className="label-mono py-10 text-center text-per-500">
+            Add a place you travel to often to see transit routes and travel
+            times from this listing.
           </p>
         ) : error ? (
           <p className="label-mono text-per-500">Commute service unavailable</p>
         ) : (
           <>
             <div className="mb-3 flex items-center justify-end gap-1">
-              {SORTS.map((s) => (
+              <span className="label-mono mr-1 text-per-500">Sort by</span>
+              {SORTS.map(([s, label]) => (
                 <button
                   key={s}
                   type="button"
@@ -74,7 +79,7 @@ export function CommuteCard({
                   }`}
                   onClick={() => onSort(s)}
                 >
-                  {s}
+                  {label}
                 </button>
               ))}
             </div>
@@ -93,9 +98,9 @@ export function CommuteCard({
                     → {destination.name}
                   </div>
                   {cell === undefined ? (
-                    <p className="text-sm text-per-500">Computing…</p>
+                    <p className="label-mono text-per-500">Computing…</p>
                   ) : cell === null ? (
-                    <p className="text-sm text-per-500">No route found.</p>
+                    <p className="label-mono text-per-500">No route found.</p>
                   ) : (
                     <>
                       <RouteMap

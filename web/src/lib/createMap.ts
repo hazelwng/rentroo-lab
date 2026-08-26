@@ -31,7 +31,7 @@ export function createMap(container: HTMLElement, center: [number, number], zoom
   });
   map.touchZoomRotate.disableRotation();
   const attribution = new AttributionControl({ compact: true });
-  map.addControl(attribution, "bottom-left");
+  map.addControl(attribution, "top-right");
   // Prevent compact attribution from covering the corner.
   map.once("load", () =>
     attribution._container.classList.remove("maplibregl-compact-show"),
