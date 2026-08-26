@@ -14,6 +14,7 @@ export function SuggestInput({
   name,
   autoFocus,
   required,
+  inputClassName,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -22,6 +23,7 @@ export function SuggestInput({
   name?: string;
   autoFocus?: boolean;
   required?: boolean;
+  inputClassName?: string;
 }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -59,7 +61,7 @@ export function SuggestInput({
         autoFocus={autoFocus}
         required={required}
         placeholder={placeholder}
-        className="w-full border-2 border-per-300 bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink"
+        className={`w-full border-2 border-per-300 bg-paper px-2 py-1.5 text-sm outline-none focus:border-ink ${inputClassName ?? ""}`}
       />
       {open && (
         <ul className="absolute inset-x-0 top-full z-10 -mt-0.5 border-2 border-ink bg-paper">

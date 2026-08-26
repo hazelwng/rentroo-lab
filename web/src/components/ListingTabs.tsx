@@ -11,10 +11,14 @@ import { useSunlight } from "@/lib/useSunlight";
 export type PageView =
   { kind: "listing"; id: string | null } | { kind: "compare" };
 
-const TAB =
-  "label-mono flex h-9 shrink-0 items-center gap-2 border-2 px-3 whitespace-nowrap";
-const TAB_ON = "border-ink bg-ink text-paper";
-const TAB_OFF = "border-per-200 bg-paper text-per-700 hover:border-ink";
+const PILL =
+  "label-mono flex h-6 shrink-0 items-center gap-1.5 border px-2 leading-none whitespace-nowrap";
+const PILL_ON = "border-ink bg-ink text-paper";
+const PILL_OFF = "border-per-200 bg-paper text-per-700 hover:border-ink";
+const CTA =
+  "label-mono flex h-7 shrink-0 items-center gap-1.5 border-2 px-2.5 leading-none whitespace-nowrap";
+const CTA_ON = "border-ink bg-ink text-paper";
+const CTA_OFF = "border-ink bg-paper text-ink hover:bg-ink hover:text-paper";
 
 function SunHours({ listing }: { listing: Listing }) {
   const { data, status } = useSunlight(
@@ -51,40 +55,59 @@ export function ListingTabs({
   const activeId = view.kind === "listing" ? view.id : null;
 
   return (
-    <div className="sticky top-0 z-20 -mx-4 border-b-2 border-per-200 bg-paper px-4">
-      <div className="flex items-center gap-2 overflow-x-auto py-2">
-        {listings.map((l) => {
-          const on = l.id === activeId;
-          return (
-            <div key={l.id} className={`${TAB} ${on ? TAB_ON : TAB_OFF} pr-1`}>
+    <div className="sticky top-0 z-20 -mt-6 mx-[calc(50%-50vw)] border-b-2 border-per-200 bg-paper">
+      <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2.5">
+        <div className="scrollbar-none flex flex-1 items-center gap-2 overflow-x-auto">
+          {listings.map((l) => {
+            const on = l.id === activeId;
+            return (
+              <div key={l.id} className={`${PILL} ${on ? PILL_ON : PILL_OFF} pr-0.5`}>
+                <button
+                  type="button"
+                  className="flex items-center gap-2"
+                  onClick={() => onView({ kind: "listing", id: l.id })}
+                >
+                  <span className="max-w-36 truncate">
+                    {l.label || l.address}
+                  </span>
+                  <span className="font-mono text-xs leading-none normal-case tracking-normal">
+                    <SunHours listing={l} />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Remove ${l.label || l.address}`}
+                  className={`px-1.5 ${on ? "text-per-300 hover:text-paper" : "text-per-300 hover:text-ink"}`}
+                  onClick={() => onRemove(l.id)}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+
+          {listings.length >= 2 && (
+            <>
+              <div className="h-5 w-px shrink-0 bg-per-300" />
               <button
                 type="button"
-                className="flex items-center gap-2"
-                onClick={() => onView({ kind: "listing", id: l.id })}
+                className={`${PILL} ${
+                  view.kind === "compare"
+                    ? PILL_ON
+                    : "border-per-300 bg-per-100 text-per-700 hover:border-ink"
+                }`}
+                onClick={() => onView({ kind: "compare" })}
               >
-                <span className="max-w-48 truncate">
-                  {l.label || l.address}
-                </span>
-                <span className="font-mono text-xs normal-case tracking-normal">
-                  <SunHours listing={l} />
-                </span>
+                ⊞ Compare
               </button>
-              <button
-                type="button"
-                aria-label={`Remove ${l.label || l.address}`}
-                className={`px-1.5 ${on ? "text-per-300 hover:text-paper" : "text-per-300 hover:text-ink"}`}
-                onClick={() => onRemove(l.id)}
-              >
-                ×
-              </button>
-            </div>
-          );
-        })}
+            </>
+          )}
+        </div>
 
         {adding ? (
           // Pick before blur.
           <div
-            className="w-72 shrink-0"
+            className="w-52 shrink-0"
             onBlur={() => {
               setAdding(false);
               setValue("");
@@ -92,6 +115,7 @@ export function ListingTabs({
           >
             <SuggestInput
               autoFocus
+              inputClassName="h-7 py-0 text-xs"
               value={value}
               onValueChange={setValue}
               onPick={(s) => {
@@ -105,20 +129,12 @@ export function ListingTabs({
         ) : (
           <button
             type="button"
-            className={`${TAB} ${TAB_OFF} text-per-500`}
+            className={`${CTA} ${CTA_OFF}`}
             onClick={() => setAdding(true)}
           >
             + Add
           </button>
         )}
-
-        <button
-          type="button"
-          className={`${TAB} ml-auto ${view.kind === "compare" ? TAB_ON : TAB_OFF}`}
-          onClick={() => onView({ kind: "compare" })}
-        >
-          ⊞ Compare
-        </button>
       </div>
     </div>
   );

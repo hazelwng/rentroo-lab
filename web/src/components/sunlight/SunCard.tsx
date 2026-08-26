@@ -125,10 +125,11 @@ export function SunCard({
     : null;
   const shown = data ?? (status === "loading" ? previous : null);
   const stale = shown !== null && data === null && status === "loading";
+  const uncovered = status === "done" && data === null;
 
   return (
-    <div className="grid border-2 border-ink bg-paper lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="relative border-b-2 border-per-200 bg-per-100 lg:border-b-0 lg:border-r-2">
+    <div className="border-2 border-ink bg-paper">
+      <div className="relative border-b-2 border-per-200 bg-per-100">
         <div className="absolute left-3 top-3 z-10 flex">
           {(["top", "room"] as const).map((v) => (
             <button
@@ -185,12 +186,21 @@ export function SunCard({
                   onNorth={setNorthDeg}
                 />
               )
+            ) : uncovered ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-6 text-center">
+                <p className="label-mono text-per-700">
+                  No building data for this area yet
+                </p>
+                <p className="label-mono text-per-500">
+                  Sunlight analysis currently covers Meguro-ku only.
+                </p>
+              </div>
             ) : (
               <div className="label-mono absolute inset-0 flex items-center justify-center text-per-500">
                 loading buildings…
               </div>
             )}
-            <span className="label-mono absolute right-3 top-3 text-per-700">
+            <span className="label-mono absolute left-3 top-12 text-per-700">
               N{" "}
               <span
                 className="inline-block"
@@ -202,25 +212,33 @@ export function SunCard({
               </span>
             </span>
             {loadingMap && (
-              <span className="label-mono absolute bottom-3 right-3 border border-per-300 bg-paper px-2 py-1 text-per-500">
+              <span className="label-mono absolute right-3 top-12 border border-per-300 bg-paper px-2 py-1 text-per-500">
                 loading map…
               </span>
             )}
+            {!uncovered && (
+              <div className="absolute inset-x-3 bottom-3 z-10 border-2 border-ink bg-paper/90 px-3 py-2">
+                <div className="label-mono mb-1.5 text-per-500">
+                  Direct light through the day
+                </div>
+                <Timeline
+                  segments={shown?.segments ?? null}
+                  value={timeMin}
+                  onChange={setTimeMin}
+                />
+              </div>
+            )}
           </div>
         ) : (
-          <div className="flex h-64 items-center justify-center text-sm text-per-500 lg:h-full">
+          <div className="label-mono flex h-64 items-center justify-center text-per-500 lg:h-full">
             Add a listing to see its sunlight.
           </div>
         )}
-        {status === "done" && data === null && (
-          <p className="label-mono absolute bottom-3 left-3 text-per-500">
-            no building data at this point (Meguro only for now)
-          </p>
-        )}
       </div>
 
-      <div className="flex flex-col gap-5 p-4">
-        <div className="flex flex-col gap-5">
+      <div className="grid sm:grid-cols-2">
+        <div className="border-b-2 border-per-200 p-4 sm:border-b-0 sm:border-r-2">
+          <div className="label-mono mb-3 text-per-700">Room</div>
           <div className="flex gap-6">
             <div>
               <div className="label-mono mb-2 text-per-500">Floor</div>
@@ -285,41 +303,33 @@ export function SunCard({
               </div>
             </div>
           </div>
-
-          <div>
-            <div className="label-mono mb-2 text-per-500">
-              Winter sun — solstice direct light
-            </div>
-            <div className="flex items-baseline gap-3">
-              {shown ? (
-                <>
-                  <SunBlocks
-                    hours={shown.hours}
-                    className="text-xl tracking-widest"
-                  />
-                  <span
-                    className={`font-mono text-2xl font-bold ${stale ? "text-per-300" : ""}`}
-                  >
-                    {shown.hours.toFixed(2)}
-                    <span className="text-xs font-normal text-per-500">h</span>
-                  </span>
-                </>
-              ) : (
-                <span className="font-mono text-per-300">
-                  {status === "loading" ? "…" : "—"}
-                </span>
-              )}
-            </div>
-          </div>
         </div>
 
-        <div>
-          <div className="label-mono mb-2 text-per-500">Timeline</div>
-          <Timeline
-            segments={shown?.segments ?? null}
-            value={timeMin}
-            onChange={setTimeMin}
-          />
+        <div className="p-4">
+          <div className="label-mono mb-3 text-per-700">Winter sun</div>
+          <div className="flex items-baseline gap-3">
+            {shown ? (
+              <>
+                <SunBlocks
+                  hours={shown.hours}
+                  className="text-xl tracking-widest"
+                />
+                <span
+                  className={`font-mono text-2xl font-bold ${stale ? "text-per-300" : ""}`}
+                >
+                  {shown.hours.toFixed(2)}
+                  <span className="text-xs font-normal text-per-500">h</span>
+                </span>
+              </>
+            ) : (
+              <span className="font-mono text-per-300">
+                {status === "loading" ? "…" : "—"}
+              </span>
+            )}
+          </div>
+          <p className="label-mono mt-2 text-per-500">
+            Hours of direct sunlight on the shortest day of the year
+          </p>
         </div>
       </div>
     </div>

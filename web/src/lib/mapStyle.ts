@@ -121,6 +121,26 @@ export const mapStyle: StyleSpecification = {
       paint: { "text-color": PER_500, "text-halo-color": PAPER, "text-halo-width": 1.5 },
     },
     {
+      id: "poi-label",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "poi",
+      filter: [
+        "all",
+        ["in", "class", "school", "college", "university", "hospital", "park",
+         "library", "police", "town_hall", "museum", "stadium", "cemetery",
+         "place_of_worship"],
+        ["has", "name"],
+      ],
+      layout: {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 11,
+        "text-max-width": 8,
+      },
+      paint: { "text-color": PER_500, "text-halo-color": PER_50, "text-halo-width": 1.5 },
+    },
+    {
       id: "station",
       type: "symbol",
       source: "omt",

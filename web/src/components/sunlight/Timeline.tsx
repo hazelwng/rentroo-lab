@@ -39,13 +39,13 @@ export function Timeline({
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label="Time of day"
       />
-      <div className="label-mono flex justify-between text-per-300">
+      <div className="label-mono flex justify-between text-per-500">
         <span>06:00</span>
         <span>12:00</span>
         <span>18:00</span>
       </div>
       <div className="mt-1 font-mono text-sm">
-        {formatTime(value)} —{" "}
+        At {formatTime(value)} this window is in{" "}
         {lit ? (
           <span className="font-semibold text-sun">direct sun ☀</span>
         ) : (
