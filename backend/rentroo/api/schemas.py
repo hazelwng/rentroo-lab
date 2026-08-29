@@ -127,3 +127,40 @@ class SunlightOut(BaseModel):
     ground: float  # shared elevation datum, metres
     window: WindowOut  # neighbour origin
     neighbours: list[NeighbourOut] | None = None  # optional footprints
+
+
+class WalkHomeIn(BaseModel):
+    lat: float
+    lon: float
+
+
+class WalkHomePoiOut(BaseModel):
+    name: str | None
+    category: str
+    lat: float
+    lon: float
+    opening_hours: str | None
+
+
+class WalkHomeStationOut(BaseModel):
+    name: str
+    lat: float
+    lon: float
+
+
+class WalkHomeLegOut(BaseModel):
+    name: str | None
+    coords: list[tuple[float, float]]
+    distance_m: int
+    night_open_pois: list[WalkHomePoiOut]
+    lamp_count: int | None
+    lit_fraction: float | None
+
+
+class WalkHomeOut(BaseModel):
+    station: WalkHomeStationOut
+    distance_m: int
+    walk_min: int
+    route_coords: list[tuple[float, float]]
+    lamps: list[tuple[float, float]]
+    legs: list[WalkHomeLegOut]

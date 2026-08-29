@@ -15,6 +15,8 @@ from rentroo.config import get_city_config
 from rentroo.geocoding import resolve_destination, suggest_places
 from rentroo.sunlight.service import sunlight_report
 from rentroo.sunlight.shadow import BuildingNotFoundError
+from rentroo.walk_home.service import WalkHomeUnavailable
+from rentroo.walk_home.service import walk_home as calculate_walk_home
 
 
 @asynccontextmanager
@@ -120,6 +122,43 @@ def create_app() -> FastAPI:
                 if report.neighbours is None
                 else [schemas.NeighbourOut(**asdict(n)) for n in report.neighbours]
             ),
+        )
+
+    @app.post("/api/walk-home")
+    async def walk_home(body: schemas.WalkHomeIn) -> schemas.WalkHomeOut:
+        """Route and mapped night context from the nearest station to a listing."""
+        try:
+            result = calculate_walk_home(body.lat, body.lon)
+        except (WalkHomeUnavailable, FileNotFoundError) as e:
+            raise HTTPException(404, detail=str(e)) from e
+        return schemas.WalkHomeOut(
+            station=schemas.WalkHomeStationOut(
+                name=result.station.name, lat=result.station.lat, lon=result.station.lon
+            ),
+            distance_m=result.distance_m,
+            walk_min=result.walk_min,
+            route_coords=[(round(la, 6), round(lo, 6)) for la, lo in result.route_coords],
+            lamps=[(round(la, 6), round(lo, 6)) for la, lo in result.lamps],
+            legs=[
+                schemas.WalkHomeLegOut(
+                    name=leg.name,
+                    coords=[(round(la, 6), round(lo, 6)) for la, lo in leg.coords],
+                    distance_m=leg.distance_m,
+                    night_open_pois=[
+                        schemas.WalkHomePoiOut(
+                            name=poi.name,
+                            category=poi.category,
+                            lat=poi.lat,
+                            lon=poi.lon,
+                            opening_hours=poi.opening_hours,
+                        )
+                        for poi in leg.night_open_pois
+                    ],
+                    lamp_count=leg.lamp_count,
+                    lit_fraction=leg.lit_fraction,
+                )
+                for leg in result.legs
+            ],
         )
 
     return app
