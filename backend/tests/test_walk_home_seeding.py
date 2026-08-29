@@ -2,7 +2,13 @@
 
 import pytest
 
-from scripts.seed_walk_home import build_graph, parse_pois, parse_stations, poi_category
+from scripts.seed_walk_home import (
+    build_graph,
+    normalize_hours,
+    parse_pois,
+    parse_stations,
+    poi_category,
+)
 
 
 @pytest.mark.parametrize(
@@ -47,6 +53,7 @@ def test_parse_pois_accepts_nodes_and_way_centres():
             "name": "Konbini",
             "category": "convenience",
             "opening_hours": "24/7",
+            "open_intervals": [[0, 10080]],
         },
         {
             "lat": 35.64,
@@ -54,6 +61,7 @@ def test_parse_pois_accepts_nodes_and_way_centres():
             "name": "カフェ",
             "category": "restaurant_cafe",
             "opening_hours": None,
+            "open_intervals": None,
         },
     ]
 
@@ -125,3 +133,36 @@ def test_parse_stations_handles_nodes_ways_and_unnamed():
         {"name": "目黒", "lat": 35.632, "lon": 139.7157},
         {"name": "自由が丘", "lat": 35.607, "lon": 139.669},
     ]
+
+
+@pytest.mark.parametrize(
+    ("hours", "expected"),
+    [
+        ("24/7", [[0, 10080]]),
+        (None, None),
+        ("", None),
+        ("12:00-14:30 sat sun , 17:30-23:00 22 last order", None),
+    ],
+)
+def test_normalize_hours_exact(hours, expected):
+    assert normalize_hours(hours) == expected
+
+
+def test_normalize_hours_daily_range():
+    intervals = normalize_hours("Mo-Su 10:00-22:00")
+    assert len(intervals) == 7
+    assert intervals[0] == [600, 1320]
+    assert intervals[6] == [9240, 9960]
+
+
+def test_normalize_hours_closed_day_has_no_intervals():
+    intervals = normalize_hours("11:30-14:00,17:00-23:00; We off")
+    wednesday = [iv for iv in intervals if 2880 <= iv[0] < 4320]
+    assert wednesday == []
+    assert len(intervals) == 12
+
+
+def test_normalize_hours_overnight_wraps_week_boundary():
+    intervals = normalize_hours("18:00-26:00")
+    assert [0, 120] in intervals
+    assert intervals[-1] == [9720, 10080]

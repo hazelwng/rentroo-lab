@@ -25,6 +25,7 @@ class Poi:
     name: str | None
     category: str
     opening_hours: str | None
+    open_intervals: tuple[tuple[int, int], ...] | None
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,11 @@ def _load_data(data_dir: Path) -> WalkHomeData:
                 name=p.get("name"),
                 category=p["category"],
                 opening_hours=p.get("opening_hours"),
+                open_intervals=(
+                    tuple((int(a), int(b)) for a, b in p["open_intervals"])
+                    if p.get("open_intervals") is not None
+                    else None
+                ),
             )
             for p in raw.get("pois", [])
         )
