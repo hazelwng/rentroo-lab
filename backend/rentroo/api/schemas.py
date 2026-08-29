@@ -153,7 +153,7 @@ class WalkHomeLegOut(BaseModel):
     name: str | None
     coords: list[tuple[float, float]]
     distance_m: int
-    night_open_pois: list[WalkHomePoiOut]
+    pois: list[WalkHomePoiOut]
     lamp_count: int | None
     lit_fraction: float | None
 

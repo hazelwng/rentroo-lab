@@ -3,7 +3,6 @@
 import pytest
 
 from rentroo.walk_home.data import Station, WalkEdge, WalkGraph, _build_adjacency
-from rentroo.walk_home.hours import open_at_or_after
 from rentroo.walk_home.legs import assign_to_legs, lit_fraction, point_to_polyline_m
 from rentroo.walk_home.routing import Leg, route_between, shortest_path
 from rentroo.walk_home.service import nearest_station
@@ -157,20 +156,3 @@ def test_lit_fraction_partial_gap():
     one_end = [(LAT, LON)]
     fraction = lit_fraction(coords, one_end)
     assert 0.0 < fraction < 0.3
-
-
-@pytest.mark.parametrize(
-    ("intervals", "expected"),
-    [
-        (((0, 10080),), True),
-        (((600, 1320),), True),
-        (((540, 1020),), False),
-        (((1320, 1680),), True),
-        (((1260, 1400),), True),
-        (((0, 120),), False),
-        ((), False),
-        (None, None),
-    ],
-)
-def test_open_at_or_after(intervals, expected):
-    assert open_at_or_after(intervals, 20 * 60) is expected
