@@ -151,6 +151,9 @@ def create_app() -> FastAPI:
                             lat=poi.lat,
                             lon=poi.lon,
                             opening_hours=poi.opening_hours,
+                            open_intervals=(
+                                list(poi.open_intervals) if poi.open_intervals is not None else None
+                            ),
                         )
                         for poi in leg.night_open_pois
                     ],

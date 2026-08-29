@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import gzip
 import json
 import math
@@ -11,6 +12,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import httpx
+from opening_hours import OpeningHours, State
 
 Bbox = tuple[float, float, float, float]
 
@@ -23,6 +25,8 @@ POI_SELECTORS = (
     '["amenity"~"^(restaurant|cafe|fast_food)$"]',
     '["amenity"~"^(bar|pub)$"]',
     '["amenity"="police"]',
+    '["shop"="chemist"]',
+    '["amenity"="pharmacy"]',
 )
 
 WALKABLE_HIGHWAYS = (
@@ -77,7 +81,36 @@ def poi_category(tags: Mapping[str, str]) -> str | None:
         return "bar_pub"
     if amenity == "police":
         return "police"
+    if shop == "chemist" or amenity == "pharmacy":
+        return "pharmacy"
     return None
+
+
+WEEK_MINUTES = 7 * 24 * 60
+REPRESENTATIVE_WEEK_START = datetime.datetime(2026, 6, 1)
+
+
+def normalize_hours(opening_hours: str | None) -> list[list[int]] | None:
+    """Weekly open intervals as [start, end) minute pairs from Monday 00:00.
+
+    A holiday-free week is sampled, so PH rules and seasonal variations are
+    flattened. Returns None when the value is missing or unparseable.
+    """
+    if not opening_hours or not opening_hours.strip():
+        return None
+    week_end = REPRESENTATIVE_WEEK_START + datetime.timedelta(days=7)
+    try:
+        spans = OpeningHours(opening_hours.strip()).intervals(REPRESENTATIVE_WEEK_START, week_end)
+        intervals = []
+        for span_start, span_end, state, _comment in spans:
+            if state != State.OPEN:
+                continue
+            start = int((span_start - REPRESENTATIVE_WEEK_START).total_seconds() // 60)
+            end = int((span_end - REPRESENTATIVE_WEEK_START).total_seconds() // 60)
+            intervals.append([max(0, start), min(WEEK_MINUTES, end)])
+    except Exception:
+        return None
+    return [[a, b] for a, b in intervals if b > a]
 
 
 def parse_pois(elements: list[dict]) -> list[dict]:
@@ -97,6 +130,7 @@ def parse_pois(elements: list[dict]) -> list[dict]:
                 "name": tags.get("name") or tags.get("name:ja"),
                 "category": category,
                 "opening_hours": tags.get("opening_hours"),
+                "open_intervals": normalize_hours(tags.get("opening_hours")),
             }
         )
     return pois

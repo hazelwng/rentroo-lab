@@ -140,6 +140,7 @@ class WalkHomePoiOut(BaseModel):
     lat: float
     lon: float
     opening_hours: str | None
+    open_intervals: list[tuple[int, int]] | None
 
 
 class WalkHomeStationOut(BaseModel):

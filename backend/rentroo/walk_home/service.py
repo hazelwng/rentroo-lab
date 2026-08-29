@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 
 from rentroo.walk_home.data import Poi, Station, get_walk_graph, get_walk_home_data
-from rentroo.walk_home.hours import is_open_at_or_after
+from rentroo.walk_home.hours import open_at_or_after
 from rentroo.walk_home.legs import assign_to_legs, coords_bbox, lit_fraction
 from rentroo.walk_home.routing import route_between
 
@@ -73,7 +73,7 @@ def walk_home(lat: float, lon: float) -> WalkHomeResult:
     night_pois = [
         poi
         for poi in data.pois_in_bbox(south, west, north, east)
-        if is_open_at_or_after(poi.opening_hours)
+        if open_at_or_after(poi.open_intervals)
     ]
 
     lamp_groups = assign_to_legs(route.legs, lamp_candidates)
