@@ -46,11 +46,12 @@ class WalkHomeData:
 
 @dataclass(frozen=True)
 class WalkEdge:
-    a: int  # node index
-    b: int
+    start_node: int  # index into WalkGraph.nodes
+    end_node: int
     distance_m: float
     name: str | None
     way_id: int
+    geometry: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -65,8 +66,8 @@ def _build_adjacency(
 ) -> dict[int, tuple[tuple[int, int], ...]]:
     adj: dict[int, list[tuple[int, int]]] = {i: [] for i in range(node_count)}
     for idx, edge in enumerate(edges):
-        adj[edge.a].append((idx, edge.b))
-        adj[edge.b].append((idx, edge.a))
+        adj[edge.start_node].append((idx, edge.end_node))
+        adj[edge.end_node].append((idx, edge.start_node))
     return {node: tuple(items) for node, items in adj.items()}
 
 
@@ -108,14 +109,25 @@ def _load_graph(graph_dir: Path) -> WalkGraph:
         with gzip.open(path, "rt", encoding="utf-8") as f:
             raw = json.load(f)
         offset = len(nodes)
-        nodes.extend((float(lat), float(lon)) for lat, lon in raw["nodes"])
+        file_nodes = tuple((float(lat), float(lon)) for lat, lon in raw["nodes"])
+        nodes.extend(file_nodes)
         edges.extend(
             WalkEdge(
-                a=int(e["a"]) + offset,
-                b=int(e["b"]) + offset,
-                distance_m=float(e["d"]),
-                name=e.get("n"),
-                way_id=int(e["w"]),
+                start_node=int(e["start_node"] if "start_node" in e else e["a"]) + offset,
+                end_node=int(e["end_node"] if "end_node" in e else e["b"]) + offset,
+                distance_m=float(e["distance_m"] if "distance_m" in e else e["d"]),
+                name=e.get("name", e.get("n")),
+                way_id=int(e["osm_way_id"] if "osm_way_id" in e else e["w"]),
+                geometry=tuple(
+                    (float(lat), float(lon))
+                    for lat, lon in e.get(
+                        "geometry",
+                        (
+                            file_nodes[int(e["start_node"] if "start_node" in e else e["a"])],
+                            file_nodes[int(e["end_node"] if "end_node" in e else e["b"])],
+                        ),
+                    )
+                ),
             )
             for e in raw["edges"]
         )

@@ -187,11 +187,12 @@ def build_graph(elements: list[dict]) -> dict:
             if distance > 0:
                 edges.append(
                     {
-                        "a": index_of(node_ids[start], *coords[0]),
-                        "b": index_of(node_ids[index], *coords[-1]),
-                        "d": round(distance, 1),
-                        "n": name,
-                        "w": way_id,
+                        "start_node": index_of(node_ids[start], *coords[0]),
+                        "end_node": index_of(node_ids[index], *coords[-1]),
+                        "distance_m": round(distance, 1),
+                        "name": name,
+                        "osm_way_id": way_id,
+                        "geometry": [[round(lat, 7), round(lon, 7)] for lat, lon in coords],
                     }
                 )
             start = index
