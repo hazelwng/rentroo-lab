@@ -6,6 +6,7 @@ import { ListingTabs, PageView } from "@/components/ListingTabs";
 import { CommuteCard } from "@/components/commute/CommuteCard";
 import { RouteSort } from "@/components/commute/CommuteRoutes";
 import { SunCard } from "@/components/sunlight/SunCard";
+import { WalkHomeCard } from "@/components/walkhome/WalkHomeCard";
 import { CommuteCell, fetchCommute, Suggestion } from "@/lib/api";
 import { useDestinations } from "@/lib/destinations";
 import { Listing, loadListings, saveListings } from "@/lib/listings";
@@ -136,6 +137,7 @@ export default function Home() {
       ) : (
         <>
           <SunCard listing={active} onChange={patchListing} />
+          <WalkHomeCard listing={active} />
           <CommuteCard
             listing={active}
             destinations={destinations}

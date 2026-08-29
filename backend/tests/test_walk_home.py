@@ -22,11 +22,11 @@ def grid_graph() -> WalkGraph:
         (LAT + 0.002, LON + 0.0015),
     )
     edges = (
-        WalkEdge(a=0, b=1, distance_m=90, name="A", way_id=1),
-        WalkEdge(a=1, b=2, distance_m=90, name="A", way_id=1),
-        WalkEdge(a=2, b=3, distance_m=90, name="B", way_id=2),
-        WalkEdge(a=0, b=4, distance_m=300, name="C", way_id=3),
-        WalkEdge(a=4, b=3, distance_m=300, name="C", way_id=3),
+        WalkEdge(start_node=0, end_node=1, distance_m=90, name="A", way_id=1),
+        WalkEdge(start_node=1, end_node=2, distance_m=90, name="A", way_id=1),
+        WalkEdge(start_node=2, end_node=3, distance_m=90, name="B", way_id=2),
+        WalkEdge(start_node=0, end_node=4, distance_m=300, name="C", way_id=3),
+        WalkEdge(start_node=4, end_node=3, distance_m=300, name="C", way_id=3),
     )
     return WalkGraph(nodes=nodes, edges=edges, adjacency=_build_adjacency(len(nodes), edges))
 
@@ -42,7 +42,7 @@ def test_shortest_path_prefers_direct_route():
 
 def test_route_between_groups_legs_by_way():
     graph = grid_graph()
-    route = route_between(graph, (LAT, LON), (LAT + 0.0001, LON + 0.0029))
+    route = route_between(graph, (LAT, LON), (LAT, LON + 0.003))
     assert route is not None
     assert route.distance_m == pytest.approx(270)
     assert [route_leg.name for route_leg in route.legs] == ["A", "B"]
@@ -53,6 +53,60 @@ def test_route_between_groups_legs_by_way():
 def test_route_between_requires_coverage():
     graph = grid_graph()
     assert route_between(graph, (LAT + 1, LON), (LAT, LON)) is None
+
+
+def test_route_between_snaps_to_middle_of_long_edge():
+    nodes = ((LAT, LON), (LAT, LON + 0.01))
+    edges = (
+        WalkEdge(
+            start_node=0,
+            end_node=1,
+            distance_m=904,
+            name="Long road",
+            way_id=1,
+        ),
+    )
+    graph = WalkGraph(nodes=nodes, edges=edges, adjacency=_build_adjacency(2, edges))
+    midpoint = (LAT, LON + 0.005)
+
+    route = route_between(graph, nodes[0], midpoint)
+
+    assert route is not None
+    assert route.distance_m == pytest.approx(452, abs=2)
+    assert route.route_coords[-1] == pytest.approx(midpoint)
+
+
+def test_route_between_preserves_curved_edge_geometry():
+    nodes = ((LAT, LON), (LAT, LON + 0.002))
+    bend = (LAT + 0.001, LON + 0.001)
+    edges = (
+        WalkEdge(
+            start_node=0,
+            end_node=1,
+            distance_m=286,
+            name="Curved road",
+            way_id=1,
+            geometry=(nodes[0], bend, nodes[1]),
+        ),
+    )
+    graph = WalkGraph(nodes=nodes, edges=edges, adjacency=_build_adjacency(2, edges))
+
+    route = route_between(graph, nodes[0], nodes[1])
+
+    assert route is not None
+    assert bend in route.route_coords
+    assert route.distance_m == pytest.approx(286)
+
+
+def test_route_between_same_location_is_zero_length_route():
+    graph = grid_graph()
+    same_off_graph_point = (LAT + 0.0001, LON + 0.0001)
+
+    route = route_between(graph, same_off_graph_point, same_off_graph_point)
+
+    assert route is not None
+    assert route.distance_m == 0
+    assert route.route_coords == [same_off_graph_point, same_off_graph_point]
 
 
 def test_point_to_polyline():

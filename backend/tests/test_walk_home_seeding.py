@@ -89,13 +89,23 @@ def test_build_graph_splits_ways_at_shared_nodes():
     assert len(graph["nodes"]) == 5
     assert len(graph["edges"]) == 4
     assert graph["edges"][0] == {
-        "a": 0,
-        "b": 1,
-        "d": pytest.approx(90.4, abs=0.2),
-        "n": "East Road",
-        "w": 10,
+        "start_node": 0,
+        "end_node": 1,
+        "distance_m": pytest.approx(90.4, abs=0.2),
+        "name": "East Road",
+        "osm_way_id": 10,
+        "geometry": [
+            [35.63, 139.7],
+            [35.63, 139.701],
+        ],
     }
-    assert {edge["w"] for edge in graph["edges"]} == {10, 20}
+    assert {edge["osm_way_id"] for edge in graph["edges"]} == {10, 20}
+
+    north_first = next(edge for edge in graph["edges"] if edge["osm_way_id"] == 20)
+    assert north_first["geometry"] == [
+        [35.629, 139.701],
+        [35.63, 139.701],
+    ]
 
 
 def test_parse_stations_handles_nodes_ways_and_unnamed():

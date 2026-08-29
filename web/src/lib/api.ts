@@ -105,3 +105,41 @@ export async function fetchSunlight(
   if (!res.ok) throw new Error(`sunlight failed: ${res.status}`);
   return res.json();
 }
+
+export type WalkHomePoi = {
+  name: string | null;
+  category: string;
+  lat: number;
+  lon: number;
+  opening_hours: string | null;
+};
+
+export type WalkHomeLeg = {
+  name: string | null;
+  coords: [number, number][];
+  distance_m: number;
+  night_open_pois: WalkHomePoi[];
+  lamp_count: number | null;
+  lit_fraction: number | null;
+};
+
+export type WalkHome = {
+  station: { name: string; lat: number; lon: number };
+  distance_m: number;
+  walk_min: number;
+  route_coords: [number, number][];
+  lamps: [number, number][];
+  legs: WalkHomeLeg[];
+};
+
+/** Fetch the walk-home route, or null when the point has no coverage. */
+export async function fetchWalkHome(lat: number, lon: number): Promise<WalkHome | null> {
+  const res = await fetch("/api/walk-home", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lat, lon }),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`walk-home failed: ${res.status}`);
+  return res.json();
+}
