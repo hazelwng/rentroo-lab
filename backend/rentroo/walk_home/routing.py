@@ -10,6 +10,9 @@ from rentroo.walk_home.data import WalkGraph
 
 MIN_LEG_M = 30.0
 MAX_LEGS = 8
+DISPLAY_TURN_DEGREES = 45.0
+DISPLAY_DIRECTION_SAMPLE_M = 20.0
+DISPLAY_MAX_GAP_M = 2.0
 # A point this far from every mapped street edge is outside seeded coverage.
 MAX_SNAP_M = 300.0
 
@@ -261,6 +264,94 @@ def _merge_short_legs(legs: list[Leg]) -> list[Leg]:
         merged.pop(second)
 
     return merged
+
+
+def _normalized_name(name: str | None) -> str | None:
+    normalized = name.strip().casefold() if name else ""
+    return normalized or None
+
+
+def _direction_near_boundary(coords: list[tuple[float, float]], *, at_end: bool) -> float | None:
+    """Bearing into or out of a leg, sampled near its shared boundary."""
+    ordered = list(reversed(coords)) if at_end else coords
+    if len(ordered) < 2:
+        return None
+
+    boundary = ordered[0]
+    sample = ordered[-1]
+    travelled = 0.0
+    for start, end in zip(ordered, ordered[1:], strict=False):
+        segment_m = _distance_m(start, end)
+        if segment_m <= 1e-6:
+            continue
+        remaining = DISPLAY_DIRECTION_SAMPLE_M - travelled
+        if segment_m >= remaining:
+            fraction = remaining / segment_m
+            sample = (
+                start[0] + (end[0] - start[0]) * fraction,
+                start[1] + (end[1] - start[1]) * fraction,
+            )
+            break
+        travelled += segment_m
+
+    start, end = (sample, boundary) if at_end else (boundary, sample)
+    mean_lat = math.radians((start[0] + end[0]) / 2)
+    north_m = (end[0] - start[0]) * 111_320.0
+    east_m = (end[1] - start[1]) * 111_320.0 * math.cos(mean_lat)
+    if abs(north_m) < 1e-9 and abs(east_m) < 1e-9:
+        return None
+    return math.degrees(math.atan2(east_m, north_m)) % 360
+
+
+def _turn_degrees(first: Leg, second: Leg) -> float:
+    incoming = _direction_near_boundary(first.coords, at_end=True)
+    outgoing = _direction_near_boundary(second.coords, at_end=False)
+    if incoming is None or outgoing is None:
+        return 180.0
+    return abs((outgoing - incoming + 180.0) % 360.0 - 180.0)
+
+
+def group_display_legs(legs: list[Leg]) -> list[Leg]:
+    """Combine OSM way runs into user-facing street or turn sections.
+
+    OSM often represents one physical street with several way IDs. Named runs
+    remain one display leg across those boundaries. Unnamed runs remain one leg
+    until the route makes a clear turn.
+    """
+
+    grouped: list[Leg] = []
+    for leg in legs:
+        current = Leg(
+            name=leg.name,
+            coords=list(leg.coords),
+            distance_m=leg.distance_m,
+            way_id=leg.way_id,
+        )
+        if not grouped:
+            grouped.append(current)
+            continue
+
+        previous = grouped[-1]
+        previous_name = _normalized_name(previous.name)
+        current_name = _normalized_name(current.name)
+        contiguous = _distance_m(previous.coords[-1], current.coords[0]) <= DISPLAY_MAX_GAP_M
+        same_named_street = previous_name is not None and previous_name == current_name
+        same_unnamed_section = (
+            previous_name is None
+            and current_name is None
+            and _turn_degrees(previous, current) < DISPLAY_TURN_DEGREES
+        )
+        if not contiguous or not (same_named_street or same_unnamed_section):
+            grouped.append(current)
+            continue
+
+        if previous.coords[-1] == current.coords[0]:
+            previous.coords.extend(current.coords[1:])
+        else:
+            previous.coords.extend(current.coords)
+        previous.distance_m += current.distance_m
+
+    return grouped
 
 
 def route_between(
