@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from rentroo.walk_home.data import Poi, Station, get_walk_graph, get_walk_home_data
 from rentroo.walk_home.legs import assign_to_legs, coords_bbox, lit_fraction
-from rentroo.walk_home.routing import route_between
+from rentroo.walk_home.routing import Leg, group_display_legs, route_between
 
 MAX_STATION_M = 2000
 WALK_MIN_PER_KM = 12.5
@@ -56,6 +56,20 @@ def nearest_station(stations: tuple[Station, ...], lat: float, lon: float) -> St
     return best
 
 
+def _rounded_leg_distances(legs: list[Leg]) -> list[int]:
+    """Round leg metres while preserving their rounded total distance."""
+    distances = [math.floor(leg.distance_m) for leg in legs]
+    remainder = round(sum(leg.distance_m for leg in legs)) - sum(distances)
+    largest_fractions = sorted(
+        range(len(legs)),
+        key=lambda index: legs[index].distance_m - distances[index],
+        reverse=True,
+    )
+    for index in largest_fractions[:remainder]:
+        distances[index] += 1
+    return distances
+
+
 def walk_home(lat: float, lon: float) -> WalkHomeResult:
     data = get_walk_home_data()
     station = nearest_station(data.stations, lat, lon)
@@ -66,23 +80,25 @@ def walk_home(lat: float, lon: float) -> WalkHomeResult:
     route = route_between(graph, (station.lat, station.lon), (lat, lon))
     if route is None:
         raise WalkHomeUnavailable("no walk-graph coverage at this location")
+    display_legs = group_display_legs(route.legs)
 
     south, west, north, east = coords_bbox(route.route_coords)
     lamp_candidates = data.lamps_in_bbox(south, west, north, east)
     corridor_pois = data.pois_in_bbox(south, west, north, east)
 
-    lamp_groups = assign_to_legs(route.legs, lamp_candidates)
-    poi_groups = assign_to_legs(route.legs, [(poi.lat, poi.lon) for poi in corridor_pois])
+    lamp_groups = assign_to_legs(display_legs, lamp_candidates)
+    poi_groups = assign_to_legs(display_legs, [(poi.lat, poi.lon) for poi in night_pois])
 
     route_lamps = [lamp_candidates[i] for group in lamp_groups for i in group]
     lamps_mapped = len(route_lamps) >= LAMP_COVERAGE_MIN
+    leg_distances = _rounded_leg_distances(display_legs)
 
     legs = [
         WalkHomeLeg(
             name=leg.name,
             coords=leg.coords,
-            distance_m=round(leg.distance_m),
-            pois=[corridor_pois[i] for i in poi_groups[k]],
+            distance_m=leg_distances[k],
+            night_open_pois=[night_pois[i] for i in poi_groups[k]],
             lamp_count=len(lamp_groups[k]) if lamps_mapped else None,
             lit_fraction=(
                 round(lit_fraction(leg.coords, [lamp_candidates[i] for i in lamp_groups[k]]), 2)
@@ -90,7 +106,7 @@ def walk_home(lat: float, lon: float) -> WalkHomeResult:
                 else None
             ),
         )
-        for k, leg in enumerate(route.legs)
+        for k, leg in enumerate(display_legs)
     ]
 
     return WalkHomeResult(
