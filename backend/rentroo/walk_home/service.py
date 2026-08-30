@@ -87,7 +87,7 @@ def walk_home(lat: float, lon: float) -> WalkHomeResult:
     corridor_pois = data.pois_in_bbox(south, west, north, east)
 
     lamp_groups = assign_to_legs(display_legs, lamp_candidates)
-    poi_groups = assign_to_legs(display_legs, [(poi.lat, poi.lon) for poi in night_pois])
+    poi_groups = assign_to_legs(display_legs, [(poi.lat, poi.lon) for poi in corridor_pois])
 
     route_lamps = [lamp_candidates[i] for group in lamp_groups for i in group]
     lamps_mapped = len(route_lamps) >= LAMP_COVERAGE_MIN
@@ -98,7 +98,7 @@ def walk_home(lat: float, lon: float) -> WalkHomeResult:
             name=leg.name,
             coords=leg.coords,
             distance_m=leg_distances[k],
-            night_open_pois=[night_pois[i] for i in poi_groups[k]],
+            pois=[corridor_pois[i] for i in poi_groups[k]],
             lamp_count=len(lamp_groups[k]) if lamps_mapped else None,
             lit_fraction=(
                 round(lit_fraction(leg.coords, [lamp_candidates[i] for i in lamp_groups[k]]), 2)
