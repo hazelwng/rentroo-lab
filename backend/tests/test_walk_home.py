@@ -5,8 +5,8 @@ import pytest
 from rentroo.walk_home.data import Station, WalkEdge, WalkGraph, _build_adjacency
 from rentroo.walk_home.hours import open_at_or_after
 from rentroo.walk_home.legs import assign_to_legs, lit_fraction, point_to_polyline_m
-from rentroo.walk_home.routing import Leg, route_between, shortest_path
-from rentroo.walk_home.service import nearest_station
+from rentroo.walk_home.routing import Leg, group_display_legs, route_between, shortest_path
+from rentroo.walk_home.service import nearest_station, walk_home
 
 LAT = 35.63
 LON = 139.70
@@ -31,8 +31,8 @@ def grid_graph() -> WalkGraph:
     return WalkGraph(nodes=nodes, edges=edges, adjacency=_build_adjacency(len(nodes), edges))
 
 
-def leg(coords, way_id=1, distance_m=100.0) -> Leg:
-    return Leg(name=None, coords=coords, distance_m=distance_m, way_id=way_id)
+def leg(coords, way_id=1, distance_m=100.0, name=None) -> Leg:
+    return Leg(name=name, coords=coords, distance_m=distance_m, way_id=way_id)
 
 
 def test_shortest_path_prefers_direct_route():
@@ -107,6 +107,34 @@ def test_route_between_same_location_is_zero_length_route():
     assert route is not None
     assert route.distance_m == 0
     assert route.route_coords == [same_off_graph_point, same_off_graph_point]
+
+
+def test_display_legs_merge_street_names_and_straight_unnamed_runs():
+    technical_legs = [
+        leg([(LAT, LON), (LAT, LON + 0.001)], way_id=1, name="Same Road"),
+        leg(
+            [(LAT, LON + 0.001), (LAT, LON + 0.002)],
+            way_id=2,
+            name="Same Road",
+        ),
+        leg([(LAT, LON + 0.002), (LAT + 0.001, LON + 0.002)], way_id=3),
+        leg([(LAT + 0.001, LON + 0.002), (LAT + 0.002, LON + 0.002)], way_id=4),
+        leg([(LAT + 0.002, LON + 0.002), (LAT + 0.002, LON + 0.003)], way_id=5),
+    ]
+
+    display_legs = group_display_legs(technical_legs)
+
+    assert [display_leg.name for display_leg in display_legs] == ["Same Road", None, None]
+    assert [display_leg.distance_m for display_leg in display_legs] == [200, 200, 100]
+    assert len(technical_legs) == 5
+
+
+def test_meguro_demo_route_has_three_display_legs():
+    result = walk_home(35.636618, 139.709809)
+
+    assert result.distance_m == 818
+    assert [display_leg.name for display_leg in result.legs] == ["目黒通り", None, None]
+    assert [display_leg.distance_m for display_leg in result.legs] == [455, 291, 72]
 
 
 def test_point_to_polyline():
