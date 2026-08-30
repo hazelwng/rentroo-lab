@@ -144,7 +144,7 @@ def create_app() -> FastAPI:
                     name=leg.name,
                     coords=[(round(la, 6), round(lo, 6)) for la, lo in leg.coords],
                     distance_m=leg.distance_m,
-                    night_open_pois=[
+                    pois=[
                         schemas.WalkHomePoiOut(
                             name=poi.name,
                             category=poi.category,
@@ -155,7 +155,7 @@ def create_app() -> FastAPI:
                                 list(poi.open_intervals) if poi.open_intervals is not None else None
                             ),
                         )
-                        for poi in leg.night_open_pois
+                        for poi in leg.pois
                     ],
                     lamp_count=leg.lamp_count,
                     lit_fraction=leg.lit_fraction,

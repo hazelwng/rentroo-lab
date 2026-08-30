@@ -2,14 +2,166 @@
 
 import { useEffect, useState } from "react";
 import { WalkHomeMap } from "@/components/walkhome/WalkHomeMap";
-import { fetchWalkHome, WalkHome } from "@/lib/api";
+import { fetchWalkHome, WalkHome, WalkHomePoi } from "@/lib/api";
 import { Listing } from "@/lib/listings";
+
+const ARRIVE_MIN = 18 * 60;
+const ARRIVE_MAX = 26 * 60;
+const ARRIVE_STEP = 30;
+const ARRIVE_DEFAULT = 20 * 60;
+const WEEKDAY_OFFSET = 2 * 24 * 60;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  convenience: "convenience",
+  supermarket: "supermarket",
+  restaurant_cafe: "food",
+  bar_pub: "bar",
+  police: "koban",
+  pharmacy: "pharmacy",
+};
+
+export function formatArrival(minute: number): string {
+  const clock = minute % (24 * 60);
+  const h = String(Math.floor(clock / 60)).padStart(2, "0");
+  const m = String(clock % 60).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+export function openAt(poi: WalkHomePoi, arriveMinute: number): boolean | null {
+  if (poi.open_intervals === null) return null;
+  const minute = WEEKDAY_OFFSET + arriveMinute;
+  return poi.open_intervals.some(([a, b]) => minute >= a && minute < b);
+}
+
+function StationIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
+      <rect x="2" y="1" width="9" height="8" fill="currentColor" />
+      <rect x="4" y="3" width="2" height="2" fill="#ffffff" />
+      <rect x="7" y="3" width="2" height="2" fill="#ffffff" />
+      <rect x="3" y="10" width="2" height="2" fill="currentColor" />
+      <rect x="8" y="10" width="2" height="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
+      <path d="M6.5 1 L12 6 H10 V12 H3 V6 H1 Z" fill="currentColor" />
+      <rect x="5.5" y="8" width="2" height="4" fill="#ffffff" />
+    </svg>
+  );
+}
+
+function legSummary(pois: WalkHomePoi[], arriveMinute: number): string | null {
+  const open = pois.filter((poi) => openAt(poi, arriveMinute) === true);
+  if (open.length === 0) return null;
+  const byCategory = new Map<string, number>();
+  for (const poi of open) {
+    const label = CATEGORY_LABELS[poi.category] ?? poi.category;
+    byCategory.set(label, (byCategory.get(label) ?? 0) + 1);
+  }
+  const parts = [...byCategory.entries()].map(([label, n]) => `${n} ${label}`);
+  return `${open.length} open · ${parts.join(" · ")}`;
+}
+
+function LegRow({
+  index,
+  leg,
+  arriveMinute,
+  highlighted,
+  onHover,
+}: {
+  index: number;
+  leg: WalkHome["legs"][number];
+  arriveMinute: number;
+  highlighted: boolean;
+  onHover: (index: number | null) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const summary = legSummary(leg.pois, arriveMinute);
+
+  return (
+    <div
+      className={`border-2 ${highlighted ? "border-ink" : "border-per-200"} bg-paper`}
+      onMouseEnter={() => onHover(index)}
+      onMouseLeave={() => onHover(null)}
+    >
+      <button
+        type="button"
+        className="flex w-full items-baseline gap-3 px-3 py-2 text-left"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className="label-mono text-per-300">
+          {String(index + 1).padStart(2, "0")}
+        </span>
+        <span className={`label-mono ${leg.name ? "text-per-700" : "text-per-500"}`}>
+          {leg.name ?? "unnamed street"}
+        </span>
+        <span className="label-mono ml-auto text-per-500">{leg.distance_m} m</span>
+        <span className="label-mono text-per-300">{expanded ? "▲" : "▼"}</span>
+      </button>
+      <div className="px-3 pb-2">
+        {summary ? (
+          <div className="label-mono text-per-700">{summary}</div>
+        ) : (
+          <div className="label-mono text-per-300">
+            No mapped places open at {formatArrival(arriveMinute)}
+          </div>
+        )}
+        {expanded && leg.pois.length > 0 && (
+          <ul className="mt-2 flex flex-col gap-1 border-t border-per-200 pt-2">
+            {leg.pois.map((poi, i) => {
+              const open = openAt(poi, arriveMinute);
+              return (
+                <li key={i} className="flex items-baseline gap-2 text-sm">
+                  <span
+                    className={
+                      open === true
+                        ? "text-ink"
+                        : open === false
+                          ? "text-per-300 line-through"
+                          : "text-per-500"
+                    }
+                  >
+                    {poi.name ?? CATEGORY_LABELS[poi.category] ?? poi.category}
+                  </span>
+                  <span className="label-mono ml-auto text-per-300">
+                    {open === null ? "hours unknown" : (poi.opening_hours ?? "")}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function WalkHomeCard({ listing }: { listing: Listing | null }) {
   const selected =
     listing && listing.lat != null && listing.lon != null ? listing : null;
   const [walkHome, setWalkHome] = useState<WalkHome | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [arriveMinute, setArriveMinute] = useState(ARRIVE_DEFAULT);
+  const [highlightLeg, setHighlightLeg] = useState<number | null>(null);
+
+  useEffect(() => {
+    const stored = Number(localStorage.getItem("rentroo.arriveAt"));
+    if (stored >= ARRIVE_MIN && stored <= ARRIVE_MAX && stored % ARRIVE_STEP === 0) {
+      setArriveMinute(stored);
+    }
+  }, []);
+
+  function changeArrival(delta: number) {
+    setArriveMinute((minute) => {
+      const next = Math.min(ARRIVE_MAX, Math.max(ARRIVE_MIN, minute + delta));
+      localStorage.setItem("rentroo.arriveAt", String(next));
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!selected) {
@@ -35,6 +187,13 @@ export function WalkHomeCard({ listing }: { listing: Listing | null }) {
     };
   }, [selected?.id, selected?.lat, selected?.lon]);
 
+  const openCount =
+    walkHome?.legs.reduce(
+      (count, leg) =>
+        count + leg.pois.filter((poi) => openAt(poi, arriveMinute) === true).length,
+      0,
+    ) ?? 0;
+
   return (
     <section className="border-2 border-ink bg-paper">
       <div className="flex flex-wrap items-center gap-3 border-b-2 border-per-200 px-4 py-3">
@@ -45,23 +204,39 @@ export function WalkHomeCard({ listing }: { listing: Listing | null }) {
               className="label-mono flex items-center gap-2 text-per-700"
               title="Nearest station, picked automatically"
             >
-              <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
-                <rect x="2" y="1" width="9" height="8" fill="currentColor" />
-                <rect x="4" y="3" width="2" height="2" fill="#ffffff" />
-                <rect x="7" y="3" width="2" height="2" fill="#ffffff" />
-                <rect x="3" y="10" width="2" height="2" fill="currentColor" />
-                <rect x="8" y="10" width="2" height="2" fill="currentColor" />
-              </svg>
+              <StationIcon />
               {walkHome.station.name}
               <span className="text-per-300">→</span>
-              <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true">
-                <path d="M6.5 1 L12 6 H10 V12 H3 V6 H1 Z" fill="currentColor" />
-                <rect x="5.5" y="8" width="2" height="4" fill="#ffffff" />
-              </svg>
+              <HomeIcon />
               home
             </span>
             <span className="label-mono text-per-500">
-              {walkHome.distance_m} m · {walkHome.walk_min} min
+              {walkHome.distance_m} m · {walkHome.walk_min} min ·{" "}
+              {walkHome.legs.length} streets
+            </span>
+            <span className="label-mono ml-auto flex items-center gap-2 text-per-500">
+              You arrive at
+              <button
+                type="button"
+                aria-label="Arrive 30 minutes earlier"
+                className="border-2 border-ink px-1.5 text-ink hover:bg-ink hover:text-paper disabled:border-per-200 disabled:text-per-300"
+                disabled={arriveMinute <= ARRIVE_MIN}
+                onClick={() => changeArrival(-ARRIVE_STEP)}
+              >
+                −
+              </button>
+              <span className="font-mono text-sm font-bold text-ink">
+                {formatArrival(arriveMinute)}
+              </span>
+              <button
+                type="button"
+                aria-label="Arrive 30 minutes later"
+                className="border-2 border-ink px-1.5 text-ink hover:bg-ink hover:text-paper disabled:border-per-200 disabled:text-per-300"
+                disabled={arriveMinute >= ARRIVE_MAX}
+                onClick={() => changeArrival(ARRIVE_STEP)}
+              >
+                +
+              </button>
             </span>
           </>
         )}
@@ -90,29 +265,47 @@ export function WalkHomeCard({ listing }: { listing: Listing | null }) {
           </div>
         ) : (
           <>
-            <WalkHomeMap
-              className="mb-4 h-[320px]"
-              walkHome={walkHome}
-              home={{
-                lat: selected.lat!,
-                lon: selected.lon!,
-                name: selected.label || selected.address,
-              }}
-            />
-
-            <div className="label-mono flex flex-wrap gap-x-8 gap-y-2 text-per-700">
-              <span>{walkHome.lamps.length} mapped lamps along the route</span>
-              <span>
-                {walkHome.legs.reduce(
-                  (count, leg) => count + leg.night_open_pois.length,
-                  0,
-                )}{" "}
-                mapped places open after 20:00
-              </span>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+              <WalkHomeMap
+                className="h-[380px]"
+                walkHome={walkHome}
+                arriveMinute={arriveMinute}
+                highlightLeg={highlightLeg}
+                home={{
+                  lat: selected.lat!,
+                  lon: selected.lon!,
+                  name: selected.label || selected.address,
+                }}
+              />
+              <div className="flex flex-col gap-3">
+                <div className="flex items-baseline gap-3">
+                  <span className="font-mono text-4xl font-bold">{openCount}</span>
+                  <span className="label-mono text-per-700">
+                    mapped places open at {formatArrival(arriveMinute)}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2 overflow-y-auto">
+                  {walkHome.legs.map((leg, index) => (
+                    <LegRow
+                      key={index}
+                      index={index}
+                      leg={leg}
+                      arriveMinute={arriveMinute}
+                      highlighted={highlightLeg === index}
+                      onHover={setHighlightLeg}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <p className="label-mono mt-3 text-right text-[10px] text-per-300">
-              OpenStreetMap coverage is partial · absence of mapped data does not mean absence
+            <p className="label-mono mt-3 text-per-500">
+              {walkHome.lamps.length} mapped lamps shown on the map · lamp data
+              is patchy, for context only
+            </p>
+            <p className="label-mono mt-1 text-right text-[10px] text-per-300">
+              OpenStreetMap coverage is partial · absence of mapped data does
+              not mean absence
             </p>
           </>
         )}

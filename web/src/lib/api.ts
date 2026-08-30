@@ -112,13 +112,14 @@ export type WalkHomePoi = {
   lat: number;
   lon: number;
   opening_hours: string | null;
+  open_intervals: [number, number][] | null;
 };
 
 export type WalkHomeLeg = {
   name: string | null;
   coords: [number, number][];
   distance_m: number;
-  night_open_pois: WalkHomePoi[];
+  pois: WalkHomePoi[];
   lamp_count: number | null;
   lit_fraction: number | null;
 };

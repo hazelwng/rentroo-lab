@@ -1,4 +1,4 @@
-"""Walk-home route from the nearest station, with per-leg night context."""
+"""Walk-home route from the nearest station, with per-leg mapped context."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import math
 from dataclasses import dataclass
 
 from rentroo.walk_home.data import Poi, Station, get_walk_graph, get_walk_home_data
-from rentroo.walk_home.hours import open_at_or_after
 from rentroo.walk_home.legs import assign_to_legs, coords_bbox, lit_fraction
 from rentroo.walk_home.routing import Leg, group_display_legs, route_between
 
@@ -20,7 +19,7 @@ class WalkHomeLeg:
     name: str | None
     coords: list[tuple[float, float]]
     distance_m: int
-    night_open_pois: list[Poi]
+    pois: list[Poi]
     lamp_count: int | None
     lit_fraction: float | None
 
@@ -85,14 +84,10 @@ def walk_home(lat: float, lon: float) -> WalkHomeResult:
 
     south, west, north, east = coords_bbox(route.route_coords)
     lamp_candidates = data.lamps_in_bbox(south, west, north, east)
-    night_pois = [
-        poi
-        for poi in data.pois_in_bbox(south, west, north, east)
-        if open_at_or_after(poi.open_intervals)
-    ]
+    corridor_pois = data.pois_in_bbox(south, west, north, east)
 
     lamp_groups = assign_to_legs(display_legs, lamp_candidates)
-    poi_groups = assign_to_legs(display_legs, [(poi.lat, poi.lon) for poi in night_pois])
+    poi_groups = assign_to_legs(display_legs, [(poi.lat, poi.lon) for poi in corridor_pois])
 
     route_lamps = [lamp_candidates[i] for group in lamp_groups for i in group]
     lamps_mapped = len(route_lamps) >= LAMP_COVERAGE_MIN
@@ -103,7 +98,7 @@ def walk_home(lat: float, lon: float) -> WalkHomeResult:
             name=leg.name,
             coords=leg.coords,
             distance_m=leg_distances[k],
-            night_open_pois=[night_pois[i] for i in poi_groups[k]],
+            pois=[corridor_pois[i] for i in poi_groups[k]],
             lamp_count=len(lamp_groups[k]) if lamps_mapped else None,
             lit_fraction=(
                 round(lit_fraction(leg.coords, [lamp_candidates[i] for i in lamp_groups[k]]), 2)

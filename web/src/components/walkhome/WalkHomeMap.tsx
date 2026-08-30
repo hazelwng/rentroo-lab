@@ -5,6 +5,7 @@ import { GeoJSONSource, LngLatBounds, Map as MapLibre } from "maplibre-gl";
 import type { Feature, LineString, Point } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { WalkHome } from "@/lib/api";
+import { openAt } from "@/components/walkhome/WalkHomeCard";
 import { createMap, EMPTY, fc, LABELS_START, squareIcon } from "@/lib/createMap";
 
 const COLOR_WALK = "#5c5ca6";
@@ -30,7 +31,11 @@ function addLayers(map: MapLibre) {
       type: "line",
       source: "route",
       layout: { "line-join": "round", "line-cap": "square" },
-      paint: { "line-color": COLOR_WALK, "line-width": 4, "line-dasharray": [1.5, 1] },
+      paint: {
+        "line-color": COLOR_WALK,
+        "line-width": ["case", ["get", "highlighted"], 7, 4],
+        "line-dasharray": [1.5, 1],
+      },
     },
     LABELS_START,
   );
@@ -93,10 +98,14 @@ function addLayers(map: MapLibre) {
 
 export function WalkHomeMap({
   walkHome,
+  arriveMinute,
+  highlightLeg,
   home,
   className = "",
 }: {
   walkHome: WalkHome;
+  arriveMinute: number;
+  highlightLeg: number | null;
   home: { lat: number; lon: number; name: string };
   className?: string;
 }) {
@@ -106,13 +115,13 @@ export function WalkHomeMap({
   const [visible, setVisible] = useState(false);
 
   const routeData = useMemo(() => {
-    const feature: Feature<LineString> = {
+    const features: Feature<LineString>[] = walkHome.legs.map((leg, index) => ({
       type: "Feature",
-      properties: {},
-      geometry: { type: "LineString", coordinates: walkHome.route_coords.map(lngLat) },
-    };
-    return fc([feature]);
-  }, [walkHome]);
+      properties: { highlighted: index === highlightLeg },
+      geometry: { type: "LineString", coordinates: leg.coords.map(lngLat) },
+    }));
+    return fc(features);
+  }, [walkHome, highlightLeg]);
 
   const lampsData = useMemo(
     () => fc(walkHome.lamps.map((p) => point(p, {}))),
@@ -123,12 +132,12 @@ export function WalkHomeMap({
     () =>
       fc(
         walkHome.legs.flatMap((leg) =>
-          leg.night_open_pois.map((poi) =>
-            point([poi.lat, poi.lon], { name: poi.name ?? "" }),
-          ),
+          leg.pois
+            .filter((poi) => openAt(poi, arriveMinute) === true)
+            .map((poi) => point([poi.lat, poi.lon], { name: poi.name ?? "" })),
         ),
       ),
-    [walkHome],
+    [walkHome, arriveMinute],
   );
 
   const endsData = useMemo(
