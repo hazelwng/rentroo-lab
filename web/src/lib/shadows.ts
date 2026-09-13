@@ -7,6 +7,23 @@ const MAX_SHADOW_M = 320;
 
 type Ring = [number, number][];
 
+function openRing(ring: Ring): Ring {
+  if (ring.length < 2) {
+    return ring;
+  }
+
+  const firstPoint = ring[0];
+  const lastPoint = ring[ring.length - 1];
+  const isAlreadyClosed =
+    firstPoint[0] === lastPoint[0] && firstPoint[1] === lastPoint[1];
+
+  if (isAlreadyClosed) {
+    return ring.slice(0, ring.length - 1);
+  }
+
+  return ring;
+}
+
 /** Sweep each footprint away from the sun. */
 export function shadowPolygons(
   neighbours: Neighbour[],
@@ -30,7 +47,7 @@ export function shadowPolygons(
     const len = Math.min(effH * perM, MAX_SHADOW_M);
     const ox = ex * len;
     const oy = ny * len;
-    const ring = b.ring;
+    const ring = openRing(b.ring);
     const parts: Ring[] = [ring.map(([x, y]) => [x + ox, y + oy])];
     for (let i = 0; i < ring.length; i++) {
       const [ax, ay] = ring[i];
