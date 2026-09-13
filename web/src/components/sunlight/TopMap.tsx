@@ -219,7 +219,7 @@ export function TopMap({
       addLayers(map);
       ready.current = true;
       refit();
-      setSources(map);
+      setAllSources(map);
     });
     return () => {
       ready.current = false;
@@ -232,7 +232,7 @@ export function TopMap({
 
   const latest = useRef({ buildingsData, shadowsData, markersData });
   latest.current = { buildingsData, shadowsData, markersData };
-  function setSources(map: MapLibre) {
+  function setAllSources(map: MapLibre) {
     const d = latest.current;
     (map.getSource("buildings") as GeoJSONSource).setData(d.buildingsData.others);
     (map.getSource("home") as GeoJSONSource).setData(d.buildingsData.home);
@@ -242,8 +242,22 @@ export function TopMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (map && ready.current) setSources(map);
-  }, [buildingsData, shadowsData, markersData]);
+    if (!map || !ready.current) return;
+    (map.getSource("buildings") as GeoJSONSource).setData(buildingsData.others);
+    (map.getSource("home") as GeoJSONSource).setData(buildingsData.home);
+  }, [buildingsData]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready.current) return;
+    (map.getSource("shadows") as GeoJSONSource).setData(shadowsData);
+  }, [shadowsData]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready.current) return;
+    (map.getSource("markers") as GeoJSONSource).setData(markersData);
+  }, [markersData]);
 
   useEffect(() => {
     const map = mapRef.current;
