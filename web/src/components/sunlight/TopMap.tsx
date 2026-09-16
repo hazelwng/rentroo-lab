@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GeoJSONSource, Map as MapLibre } from "maplibre-gl";
 import type { Feature, Polygon, MultiPolygon } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -8,11 +8,13 @@ import type { Neighbour } from "@/lib/api";
 import { findHome } from "@/lib/buildingGeometry";
 import { createMap, EMPTY, fc, LABELS_START } from "@/lib/createMap";
 import { shadowPolygons } from "@/lib/shadows";
+import type { Bounds } from "@/lib/shadows";
 import { sunPosition } from "@/lib/sun";
 
 /** MapLibre top view with buildings, shadows, and markers. */
 
 const HALF_WIDTH = 150; // metres
+const VIEWPORT_PADDING = 5; // keep shadows touching the visible edge
 const M_PER_DEG_LAT = 111_320;
 const SUN_MARKER_M = 135;
 
@@ -39,6 +41,26 @@ function square(cx: number, cy: number, half: number): Ring {
 }
 
 const closed = (ring: Ring): Ring => (ring.length ? [...ring, ring[0]] : ring);
+
+function shadowViewport(el: HTMLElement): Bounds | null {
+  if (!el.clientWidth || !el.clientHeight) return null;
+  const halfHeight = HALF_WIDTH / (el.clientWidth / el.clientHeight);
+  return {
+    minX: -HALF_WIDTH - VIEWPORT_PADDING,
+    minY: -halfHeight - VIEWPORT_PADDING,
+    maxX: HALF_WIDTH + VIEWPORT_PADDING,
+    maxY: halfHeight + VIEWPORT_PADDING,
+  };
+}
+
+function sameBounds(a: Bounds | null, b: Bounds): boolean {
+  return (
+    a?.minX === b.minX &&
+    a.minY === b.minY &&
+    a.maxX === b.maxX &&
+    a.maxY === b.maxY
+  );
+}
 
 function frame(map: MapLibre, lat: number, lon: number) {
   const el = map.getContainer();
@@ -144,6 +166,7 @@ export function TopMap({
   busy.current = onBusy;
   const mapRef = useRef<MapLibre | null>(null);
   const ready = useRef(false);
+  const [viewport, setViewport] = useState<Bounds | null>(null);
   const view = useRef({ lat, lon });
   view.current = { lat, lon };
 
@@ -164,14 +187,21 @@ export function TopMap({
   }, [neighbours, home, project]);
 
   const shadowsData = useMemo(() => {
-    const polys = shadowPolygons(neighbours, ground, lat, lon, timeMin);
+    const polys = shadowPolygons(
+      neighbours,
+      ground,
+      lat,
+      lon,
+      timeMin,
+      viewport ?? undefined,
+    );
     const features: Feature<MultiPolygon>[] = polys.map((parts) => ({
       type: "Feature",
       properties: {},
       geometry: { type: "MultiPolygon", coordinates: parts.map((r) => [closed(r).map(project)]) },
     }));
     return fc(features);
-  }, [neighbours, ground, lat, lon, timeMin, project]);
+  }, [neighbours, ground, lat, lon, timeMin, viewport, project]);
 
   const markersData = useMemo(() => {
     const fr = (facing * Math.PI) / 180;
@@ -211,7 +241,11 @@ export function TopMap({
     if (!container.current) return;
     const map = createMap(container.current, [view.current.lon, view.current.lat], 16);
     mapRef.current = map;
-    const refit = () => frame(map, view.current.lat, view.current.lon);
+    const refit = () => {
+      frame(map, view.current.lat, view.current.lon);
+      const next = shadowViewport(map.getContainer());
+      if (next) setViewport((current) => (sameBounds(current, next) ? current : next));
+    };
     map.on("resize", refit);
     map.on("dataloading", () => busy.current?.(true));
     map.on("idle", () => busy.current?.(false));

@@ -7,6 +7,13 @@ const MAX_SHADOW_M = 320;
 
 type Ring = [number, number][];
 
+export type Bounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
 function openRing(ring: Ring): Ring {
   if (ring.length < 2) {
     return ring;
@@ -24,6 +31,38 @@ function openRing(ring: Ring): Ring {
   return ring;
 }
 
+function sweptShadowIntersects(
+  ring: Ring,
+  ox: number,
+  oy: number,
+  viewport: Bounds,
+): boolean {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of ring) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+
+  // The shadow includes the footprint translated by (ox, oy) and the swept
+  // side faces between them. Cull only when that whole area misses the view.
+  minX = Math.min(minX, minX + ox);
+  minY = Math.min(minY, minY + oy);
+  maxX = Math.max(maxX, maxX + ox);
+  maxY = Math.max(maxY, maxY + oy);
+
+  return !(
+    maxX < viewport.minX ||
+    minX > viewport.maxX ||
+    maxY < viewport.minY ||
+    minY > viewport.maxY
+  );
+}
+
 /** Sweep each footprint away from the sun. */
 export function shadowPolygons(
   neighbours: Neighbour[],
@@ -31,6 +70,7 @@ export function shadowPolygons(
   lat: number,
   lon: number,
   timeMin: number,
+  viewport?: Bounds,
 ): Ring[][] {
   const { altitude, azimuth } = sunPosition(lat, lon, timeMin);
   if (altitude <= 0.5) return [];
@@ -48,6 +88,9 @@ export function shadowPolygons(
     const ox = ex * len;
     const oy = ny * len;
     const ring = openRing(b.ring);
+    if (!ring.length || (viewport && !sweptShadowIntersects(ring, ox, oy, viewport))) {
+      continue;
+    }
     const parts: Ring[] = [ring.map(([x, y]) => [x + ox, y + oy])];
     for (let i = 0; i < ring.length; i++) {
       const [ax, ay] = ring[i];
