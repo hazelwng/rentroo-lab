@@ -1,8 +1,9 @@
 # Tokyo
 
-## GTFS feed (`gtfs/`)
+## Legacy GTFS feed (`gtfs/`)
 
-Tokyo Metro subway timetable, published by 東京メトロ (Tokyo Metro Co., Ltd.).
+Tokyo Metro subway timetable retained as the original demo dataset. The
+runtime commute provider now uses the full-network bundle below.
 
 - **Source**: redistributed from [mini-tokyo-3d](https://github.com/nagix/mini-tokyo-3d)
   under the MIT license (see `gtfs/LICENSE`). Original data comes from the
@@ -26,8 +27,8 @@ from the mini-tokyo-3d data pipeline, drop the eight files above into
 
 `mini_tokyo_weekday.json.gz` is a precompiled, read-only snapshot containing
 station and railway metadata, weekday connections, and interchange footpaths.
-It is included in the Docker image but is not selected by the runtime provider
-until that integration is enabled separately.
+The runtime commute provider loads it once and caches the resulting feed and
+route indexes for subsequent requests.
 
 - **Source**: [mini-tokyo-3d](https://github.com/nagix/mini-tokyo-3d), revision
   `82b996aac8691c6a3ca1d9776dafc7e0ceff3aa1`.

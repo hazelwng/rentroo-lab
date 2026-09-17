@@ -1,4 +1,4 @@
-"""Integration tests: the commute service against the real Tokyo Metro feed."""
+"""Integration tests: the commute service against Tokyo's real transit bundle."""
 
 import pytest
 
@@ -9,6 +9,7 @@ from rentroo.config import CityConfig, reset_city_config, set_city_config
 NAKAMEGURO = (35.6440, 139.6990)
 OTEMACHI = (35.6869, 139.7641)
 SHIBUYA = (35.6580, 139.7016)
+MEGURO = (35.6335, 139.7155)
 
 
 @pytest.fixture
@@ -62,3 +63,11 @@ async def test_batch_shares_origin_scans(real_tokyo):
     assert all(r is not None and r.transit_minutes for r in results)
     # Shibuya is one stop from Nakameguro; Otemachi crosses the city
     assert results[1].transit_minutes < results[0].transit_minutes
+
+
+async def test_meguro_to_shibuya_uses_full_network_jr(real_tokyo):
+    result = await calculate_commute(MEGURO, SHIBUYA)
+
+    assert result.transit_route_summary != "Walk directly to destination"
+    rides = [leg for leg in result.transit_itinerary.legs if leg.kind == "ride"]
+    assert any(leg.line == "山手線" for leg in rides)

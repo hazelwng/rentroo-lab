@@ -6,20 +6,21 @@ how much direct sun a room gets on the shortest day of the year.
 ```text
 backend/   FastAPI: commute + sunlight APIs, CSA engine, PLATEAU seed script
 web/       Next.js: listing tabs, MapLibre maps, Three.js room view
-cities/    data: Tokyo Metro timetable, extracted Meguro buildings
+cities/    data: Greater Tokyo rail timetable, extracted Meguro buildings
 ```
 
 ## Commute
 
-A Connection Scan Algorithm (CSA) engine over the Tokyo Metro timetable
-(9 lines, 185 platforms, 88,675 train movements per weekday). One scan finds
-the earliest arrival at every station in ~8 ms, and answering one commute
-takes ~25 ms.
+A Connection Scan Algorithm (CSA) engine over a compiled Mini Tokyo 3D weekday
+snapshot: 179 railway lines, 2,583 located stops, and 588,859 train movements.
+The feed and route indexes are loaded once per backend process and reused by
+later commute requests.
 
 ```text
-Tokyo Metro GTFS
+Mini Tokyo 3D static data
 → weekday trips
 → atomic timetable connections
+→ explicit interchange footpaths
 → CSA scans
 → route options: fastest / fewest transfers / least walking
 → FastAPI
@@ -49,8 +50,8 @@ PLATEAU CityGML
 
 ## Scope
 
-- Tokyo Metro only (no JR, Toei, or private railways, so some commutes read
-  longer than reality).
+- Transit uses a pinned weekday timetable snapshot; it does not model live
+  delays, service changes, or weekend schedules.
 - Sunlight covers Meguro ward and always uses the winter solstice.
 - Buildings are prisms, not meshes; access/egress walks are straight-line
   estimates. Results are apartment-research estimates, not daylight
@@ -65,7 +66,7 @@ Dataset sources, licensing, and regeneration notes:
   can get as time passes.
 - Sunlight for spring and summer.
 - "Arrive by 9:00" search: when is the latest you can leave home?
-- Cover more of Tokyo (currently: Meguro ward, Tokyo Metro lines).
+- Cover more Tokyo wards with sunlight and walk-home data.
 - A link you can send to a friend to show them your comparison.
 
 ## Run locally

@@ -1,9 +1,4 @@
-"""
-GTFS/CSA commute provider (the JP/Tokyo provider).
-
-Runs a Connection Scan over the active city's GTFS feed and returns
-fastest / fewest-transfers / least-walking route options.
-"""
+"""CSA commute provider backed by Tokyo's transit bundle."""
 
 from __future__ import annotations
 
@@ -23,15 +18,15 @@ from rentroo.commute.types import (
 from rentroo.config import get_city_config
 from rentroo.transit.csa import MIN_TRANSFER_SEC, ScanResult, reconstruct, scan
 from rentroo.transit.direct_walking import build_direct_walk_option
-from rentroo.transit.gtfs import Connection, Feed, Stop, load_feed, parse_gtfs_time
-from rentroo.transit.transfers import Footpath, build_footpaths
+from rentroo.transit.gtfs import Connection, Feed, Stop, parse_gtfs_time
+from rentroo.transit.mini_tokyo import load_mini_tokyo_bundle
+from rentroo.transit.transfers import Footpath
 
-# Boarding penalty that makes the fewest-transfers scan prefer staying on a
-# train unless changing saves more than this much time.
+# Prefer staying onboard unless a transfer saves this much time.
 TRANSFER_PENALTY_SEC = 15 * 60
-# Nearby stations considered as boarding/alighting candidates for the fastest
-# and fewest-transfers variants (least-walking always uses the nearest one).
+# Candidate stations; least-walking uses only the nearest.
 STATION_CANDIDATES = 3
+TRANSIT_BUNDLE = Path("transit/mini_tokyo_weekday.json.gz")
 
 
 # ---- private journey types ----
@@ -56,15 +51,21 @@ class _Journey:
 
 @dataclass(frozen=True)
 class _OriginScans:
-    """The origin-seeded earliest-arrival maps, one per route criterion.
-
-    Each is destination-independent (see `scan`), so a single set answers every
-    destination — the reuse that makes `calculate_batch` cost ~3 scans, not 3N.
-    """
+    """Reusable origin scans, one per route criterion."""
 
     fastest: ScanResult  # all origins, no penalty
     least_walking: ScanResult  # nearest origin only, no penalty
     fewest_transfers: ScanResult  # all origins, transfer penalty
+
+
+@dataclass
+class _TransitRuntime:
+    """Cached feed and route indexes."""
+
+    feed: Feed
+    footpaths: dict[str, list[Footpath]]
+    departures: dict[tuple[str, str], list[Connection]]
+    trip_connections: dict[str, list[Connection]]
 
 
 # ---- the provider ----
@@ -75,14 +76,14 @@ class GtfsCsaProvider:
 
     async def calculate(self, query: CommuteQuery) -> CommuteResult:
         config = get_city_config()
-        feed, footpaths = _load_gtfs_runtime(config.city_dir / "gtfs")
+        runtime = _load_transit_runtime(config.city_dir)
+        feed, footpaths = runtime.feed, runtime.footpaths
         origin_candidates = _nearest_stations(feed, query.origin, STATION_CANDIDATES)
         departure = parse_gtfs_time(query.departure)
 
         scans = _run_origin_scans(feed, footpaths, origin_candidates, departure)
         result = _build_result_for_destination(
-            feed,
-            config.city_dir / "gtfs",
+            runtime,
             scans,
             origin_candidates,
             query.origin,
@@ -103,22 +104,19 @@ class GtfsCsaProvider:
         destinations: list[tuple[float, float]],
         departure_time: str = "08:00:00",
     ) -> list[CommuteResult | None]:
-        """Route options to many destinations from one origin, sharing the (up to
-        three) origin-seeded CSA scans across all of them.
+        """Route to many destinations using shared origin scans.
 
-        The scans depend only on the origin (and transfer penalty), so N
-        destinations cost ~3 scans total rather than 3N. Returns results aligned
-        to `destinations`; an entry is None when no weekday route was found.
+        Results align with ``destinations``; unreachable entries are ``None``.
         """
         config = get_city_config()
-        feed, footpaths = _load_gtfs_runtime(config.city_dir / "gtfs")
+        runtime = _load_transit_runtime(config.city_dir)
+        feed, footpaths = runtime.feed, runtime.footpaths
         origin_candidates = _nearest_stations(feed, origin, STATION_CANDIDATES)
         departure = parse_gtfs_time(departure_time)
         scans = _run_origin_scans(feed, footpaths, origin_candidates, departure)
-        gtfs_dir = config.city_dir / "gtfs"
         return [
             _build_result_for_destination(
-                feed, gtfs_dir, scans, origin_candidates, origin, dest, departure
+                runtime, scans, origin_candidates, origin, dest, departure
             )
             for dest in destinations
         ]
@@ -128,12 +126,16 @@ class GtfsCsaProvider:
 
 
 @lru_cache(maxsize=4)
-def _load_gtfs_runtime(gtfs_dir: Path) -> tuple[Feed, dict[str, list[Footpath]]]:
+def _load_transit_runtime(city_dir: Path) -> _TransitRuntime:
+    bundle_path = city_dir / TRANSIT_BUNDLE
     try:
-        feed = load_feed(gtfs_dir)
-    except FileNotFoundError as exc:
-        raise CommuteProviderUnavailable(str(exc)) from exc
-    return feed, build_footpaths(feed)
+        feed, footpaths = load_mini_tokyo_bundle(bundle_path)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        raise CommuteProviderUnavailable(
+            f"Tokyo transit bundle could not be loaded from '{bundle_path}': {exc}"
+        ) from exc
+    departures, trip_connections = _build_route_indexes(feed)
+    return _TransitRuntime(feed, footpaths, departures, trip_connections)
 
 
 def _nearest_stations(
@@ -141,7 +143,7 @@ def _nearest_stations(
 ) -> list[_StationMatch]:
     """The k nearest distinct stations (grouping same-name platforms), closest first."""
     if not feed.stops:
-        raise CommuteProviderUnavailable("The configured GTFS feed contains no stops")
+        raise CommuteProviderUnavailable("The configured transit feed contains no stops")
     best_by_name: dict[str, tuple[float, Stop]] = {}
     for stop in feed.stops.values():
         distance = _distance_m(coordinates, (stop.lat, stop.lon))
@@ -244,26 +246,21 @@ def _run_origin_scans(
 
 
 def _build_result_for_destination(
-    feed: Feed,
-    gtfs_dir: Path,
+    runtime: _TransitRuntime,
     scans: _OriginScans,
     origin_candidates: list[_StationMatch],
     origin_coords: tuple[float, float],
     dest_coords: tuple[float, float],
     departure: int,
 ) -> CommuteResult | None:
-    """Turn pre-computed origin scans into a route table for one destination.
-
-    Only the destination-side work (nearest-station lookup, journey picks,
-    retime, dedupe, itinerary build) runs here; the expensive scans are shared in
-    via `scans`. Returns None when no weekday route reaches the destination."""
+    """Build one destination result from shared origin scans."""
+    feed = runtime.feed
     dest_candidates = _nearest_stations(feed, dest_coords, STATION_CANDIDATES)
     direct_walk = build_direct_walk_option(origin_coords, dest_coords)
 
     fastest = _pick_journey(feed, scans.fastest, origin_candidates, dest_candidates)
     if fastest is None:
-        # A same-station trip has no train leg for CSA to reconstruct. Walking
-        # door to door is still a valid route and avoids inventing a rail loop.
+        # Same-station trips have no train leg to reconstruct.
         if origin_candidates[0].name == dest_candidates[0].name:
             return _direct_walk_result(origin_coords, dest_coords, direct_walk)
         return None
@@ -275,9 +272,8 @@ def _build_result_for_destination(
         feed, scans.fewest_transfers, origin_candidates, dest_candidates
     )
     if fewest_transfers is not None:
-        # The penalty may have made the journey board later trains than
-        # necessary; replay its exact stop pattern with real minimal waits.
-        fewest_transfers = _retime_journey(feed, gtfs_dir, fewest_transfers, departure)
+        # Remove artificial waits introduced by the transfer penalty.
+        fewest_transfers = _retime_journey(runtime, fewest_transfers, departure)
 
     # Dedupe the candidate journeys into unique routes (same stations + lines).
     unique_itineraries: list[TransitItinerary] = []
@@ -293,11 +289,8 @@ def _build_result_for_destination(
             _build_itinerary(feed, journey, departure, origin_coords, dest_coords)
         )
 
-    # Assign each criterion to the route that actually wins it by measured
-    # metric — not by which scan produced it. The nearest-station "least walking"
-    # scan only minimises access/egress; a route it finds can still walk more in
-    # transfers than the fastest one, so tagging by construction mislabels it.
-    # A candidate that wins nothing is strictly dominated and is dropped.
+    # Tag measured winners, not the scan that produced each route.
+    # Drop candidates that win no criterion.
     tags_for: list[list[str]] = [[] for _ in unique_itineraries]
 
     def _winner(metric) -> int:
@@ -353,12 +346,10 @@ def _direct_walk_result(
     )
 
 
-@lru_cache(maxsize=4)
-def _route_indexes(
-    gtfs_dir: Path,
+def _build_route_indexes(
+    feed: Feed,
 ) -> tuple[dict[tuple[str, str], list[Connection]], dict[str, list[Connection]]]:
-    """(route_id, dep_stop) -> departures in time order; trip_id -> full trip in order."""
-    feed, _ = _load_gtfs_runtime(gtfs_dir)
+    """Index departures by route/stop and connections by trip."""
     dep_index: dict[tuple[str, str], list[Connection]] = {}
     trip_conns: dict[str, list[Connection]] = {}
     for connection in feed.connections:  # already globally sorted by dep_time
@@ -375,8 +366,7 @@ def _earliest_ride(
     arr_stop: str,
     ready: int,
 ) -> list[Connection] | None:
-    """Earliest trip of `route_id` boardable at `dep_stop` from `ready` that
-    reaches `arr_stop`; its connections from boarding to alighting."""
+    """Find the earliest matching ride after ``ready``."""
     for candidate in dep_index.get((route_id, dep_stop), ()):
         if candidate.dep_time < ready:
             continue
@@ -389,14 +379,9 @@ def _earliest_ride(
     return None
 
 
-def _retime_journey(feed: Feed, gtfs_dir: Path, journey: _Journey, departure: int) -> _Journey:
-    """Replay a journey's exact stop pattern boarding the earliest real trains.
-
-    A transfer-penalized scan proves which pattern needs the fewest transfers
-    but boards each post-transfer train up to the penalty late; this removes
-    that slack. Falls back to the original journey if any segment cannot be
-    re-matched (it is still a feasible timetable journey, just with waits)."""
-    dep_index, trip_conns = _route_indexes(gtfs_dir)
+def _retime_journey(runtime: _TransitRuntime, journey: _Journey, departure: int) -> _Journey:
+    """Replay a route without artificial transfer-penalty waits."""
+    dep_index, trip_conns = runtime.departures, runtime.trip_connections
     ready = departure + _walk_minutes(journey.origin.distance_m) * 60
     arrival = ready
     new_legs: list[Connection | Footpath] = []

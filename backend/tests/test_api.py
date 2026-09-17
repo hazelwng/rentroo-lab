@@ -8,7 +8,9 @@ from rentroo.commute.types import CommuteProviderUnavailable, CommuteResult
 from rentroo.config import CityConfig, reset_city_config, set_city_config
 
 NAKAMEGURO = {"lat": 35.6440, "lon": 139.6990}
+MEGURO = {"lat": 35.6335, "lon": 139.7155}
 OTEMACHI = {"name": "大手町", "lat": 35.6869, "lon": 139.7641}
+SHIBUYA = {"name": "渋谷", "lat": 35.6580, "lon": 139.7016}
 
 
 @pytest.fixture
@@ -133,3 +135,16 @@ async def test_commute_end_to_end_real_feed(real_client):
     assert result["route_options"]
     kinds = [leg["kind"] for leg in result["itinerary"]["legs"]]
     assert kinds[0] == "walk" and kinds[-1] == "walk"
+
+
+async def test_commute_api_uses_full_network_bundle_for_jr(real_client):
+    resp = await real_client.post(
+        "/api/commute",
+        json={"origins": [{"id": "meguro", **MEGURO}], "destinations": [SHIBUYA]},
+    )
+
+    assert resp.status_code == 200
+    result = resp.json()["origins"][0]["results"][0]
+    assert result["summary"] == "山手線"
+    rides = [leg for leg in result["itinerary"]["legs"] if leg["kind"] == "ride"]
+    assert any(leg["line"] == "山手線" for leg in rides)
