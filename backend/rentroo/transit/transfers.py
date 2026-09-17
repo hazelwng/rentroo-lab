@@ -9,6 +9,7 @@ pair in a group.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from rentroo.transit.gtfs import Feed
@@ -49,10 +50,26 @@ def build_footpaths(feed: Feed) -> dict[str, list[Footpath]]:
     for stop in feed.stops.values():
         by_name.setdefault(stop.name, []).append(stop.stop_id)
 
+    return build_group_footpaths(feed, by_name.values())
+
+
+def build_group_footpaths(
+    feed: Feed, station_groups: Iterable[Iterable[str]]
+) -> dict[str, list[Footpath]]:
+    """Build directed walking edges between every stop in each station group.
+
+    This is the shared primitive behind same-name GTFS transfers and explicit
+    interchange groups supplied by sources such as Mini Tokyo 3D.
+    """
+
     footpaths: dict[str, list[Footpath]] = {}
-    for stop_ids in by_name.values():
+    for group in station_groups:
+        stop_ids = list(dict.fromkeys(group))
         if len(stop_ids) < 2:
             continue
+        unknown = [stop_id for stop_id in stop_ids if stop_id not in feed.stops]
+        if unknown:
+            raise ValueError(f"Station group references unknown stops: {', '.join(unknown)}")
         for a in stop_ids:
             for b in stop_ids:
                 if a == b:

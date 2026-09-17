@@ -22,6 +22,39 @@ Download a fresh feed from ODPT (free developer registration required) or
 from the mini-tokyo-3d data pipeline, drop the eight files above into
 `gtfs/`, and check `feed_info.txt` for the new validity window.
 
+## Full-network transit bundle (`transit/`)
+
+`mini_tokyo_weekday.json.gz` is a precompiled, read-only snapshot containing
+station and railway metadata, weekday connections, and interchange footpaths.
+It is included in the Docker image but is not selected by the runtime provider
+until that integration is enabled separately.
+
+- **Source**: [mini-tokyo-3d](https://github.com/nagix/mini-tokyo-3d), revision
+  `82b996aac8691c6a3ca1d9776dafc7e0ceff3aa1`.
+- **Attribution**: Mini Tokyo 3D copyright Akihiko Kusanagi. Underlying public
+  transportation data comes from ODPT and public transport operators.
+- **License**: see `gtfs/LICENSE`. Check the applicable ODPT terms before
+  redistributing a newly generated snapshot.
+
+The snapshot was transformed by Rentroo. Accuracy and completeness are not
+guaranteed; do not contact the public transport operators about Rentroo's
+output.
+
+### Regenerating
+
+From a local Mini Tokyo 3D checkout:
+
+```sh
+cd backend
+python scripts/build_mini_tokyo_transit.py \
+  /path/to/mini-tokyo-3d/data \
+  --source-revision 82b996aac8691c6a3ca1d9776dafc7e0ceff3aa1 \
+  --output ../cities/tokyo/transit/mini_tokyo_weekday.json.gz
+```
+
+The gzip output is deterministic: rebuilding from the same source revision and
+loader code produces identical bytes.
+
 ## Buildings (`buildings/`)
 
 Building footprints and measured heights for shadow casting, one gzipped
