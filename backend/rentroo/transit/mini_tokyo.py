@@ -237,25 +237,38 @@ def load_mini_tokyo_bundle(
 
         feed = Feed()
         stop_ids: list[str] = []
-        for stop_id, name, lat, lon, parent_station in bundle["stops"]:
+        stop_rows = bundle.pop("stops")
+        for index, (stop_id, name, lat, lon, parent_station) in enumerate(stop_rows):
             stop_ids.append(stop_id)
             feed.stops[stop_id] = Stop(stop_id, name, float(lat), float(lon), parent_station)
+            # Release decoded rows as runtime objects are built.
+            stop_rows[index] = None
 
         route_ids: list[str] = []
-        for route_id, name, color in bundle["routes"]:
+        route_rows = bundle.pop("routes")
+        for index, (route_id, name, color) in enumerate(route_rows):
             route_ids.append(route_id)
             feed.route_names[route_id] = name
             if color:
                 feed.route_colors[route_id] = color
+            route_rows[index] = None
 
         trip_ids: list[str] = []
-        for trip_id, route_index in bundle["trips"]:
+        trip_rows = bundle.pop("trips")
+        for index, (trip_id, route_index) in enumerate(trip_rows):
             trip_ids.append(trip_id)
             feed.trip_routes[trip_id] = route_ids[route_index]
+            trip_rows[index] = None
 
-        for dep_stop, arr_stop, dep_time, arr_time, trip_index, route_index in bundle[
-            "connections"
-        ]:
+        connection_rows = bundle.pop("connections")
+        for index, (
+            dep_stop,
+            arr_stop,
+            dep_time,
+            arr_time,
+            trip_index,
+            route_index,
+        ) in enumerate(connection_rows):
             feed.connections.append(
                 Connection(
                     dep_stop=stop_ids[dep_stop],
@@ -266,13 +279,16 @@ def load_mini_tokyo_bundle(
                     route_id=route_ids[route_index],
                 )
             )
+            connection_rows[index] = None
 
         footpaths: dict[str, list[Footpath]] = {}
-        for from_stop, to_stop, walk_time in bundle["footpaths"]:
+        footpath_rows = bundle.pop("footpaths")
+        for index, (from_stop, to_stop, walk_time) in enumerate(footpath_rows):
             from_stop_id = stop_ids[from_stop]
             footpaths.setdefault(from_stop_id, []).append(
                 Footpath(from_stop_id, stop_ids[to_stop], walk_time)
             )
+            footpath_rows[index] = None
     except (gzip.BadGzipFile, json.JSONDecodeError, KeyError, TypeError, IndexError) as exc:
         raise ValueError(f"Invalid Mini Tokyo bundle at '{bundle_path}'") from exc
 

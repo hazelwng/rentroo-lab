@@ -20,7 +20,7 @@ DETOUR_FACTOR = 1.5  # straight-line -> corridors/stairs
 BUFFER_SEC = 120  # add buffer time for passing gates and platform changes
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Footpath:
     from_stop: str
     to_stop: str

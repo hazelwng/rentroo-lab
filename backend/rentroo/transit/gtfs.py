@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Stop:
     stop_id: str
     name: str
@@ -21,7 +21,7 @@ class Stop:
     parent_station: str  # blank in the Tokyo Metro feed; transfers.py groups by name instead
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Connection:
     """One vehicle movement between two adjacent stops on a trip."""
 
