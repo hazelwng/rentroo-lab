@@ -121,9 +121,6 @@ export function CommuteCard({
                 </div>
               );
             })}
-            <p className="label-mono mt-3 text-right text-[10px] text-per-300">
-              Tokyo Metro lines only · JR / Tokyu / Toei not covered
-            </p>
           </>
         )}
       </div>

@@ -298,15 +298,6 @@ export function WalkHomeCard({ listing }: { listing: Listing | null }) {
                 </div>
               </div>
             </div>
-
-            <p className="label-mono mt-3 text-per-500">
-              {walkHome.lamps.length} mapped lamps shown on the map · lamp data
-              is patchy, for context only
-            </p>
-            <p className="label-mono mt-1 text-right text-[10px] text-per-300">
-              OpenStreetMap coverage is partial · absence of mapped data does
-              not mean absence
-            </p>
           </>
         )}
       </div>
