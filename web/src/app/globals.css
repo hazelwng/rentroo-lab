@@ -83,3 +83,19 @@ body {
     cursor: ew-resize;
   }
 }
+
+@layer components {
+  .wh-popup,
+  .wh-popup .maplibregl-popup-content {
+    pointer-events: none;
+  }
+  .wh-popup .maplibregl-popup-content {
+    border: 1px solid var(--color-ink);
+    border-radius: 0;
+    box-shadow: none;
+    padding: 3px 6px;
+  }
+  .wh-popup .maplibregl-popup-tip {
+    display: none;
+  }
+}
